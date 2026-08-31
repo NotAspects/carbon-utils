@@ -1,0 +1,38 @@
+# Dependencies & build
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+prisma/dev.db
+prisma/dev.db-journal
+
+# Keys, certs, credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+credentials.json
+.secrets/
+secrets/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
