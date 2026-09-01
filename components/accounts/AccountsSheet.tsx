@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Columns3, Eraser, Redo2, Trash2, Undo2 } from "lucide-react";
-import { ACCOUNT_STATUSES, type AccountStatus } from "@/lib/sites";
+import { ACCOUNT_STATUSES, parseAccountLines, type AccountStatus, type ParsedAccount } from "@/lib/sites";
 import type { AccountRow } from "./AccountsManager";
 
 export const SHEET_COLUMNS = [
@@ -85,37 +85,148 @@ function parseTsvLine(line: string) {
   return cells;
 }
 
+function splitDelimited(line: string, delim: string) {
+  const cells: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (ch === '"') quoted = false;
+      else cur += ch;
+      continue;
+    }
+    if (ch === '"') quoted = true;
+    else if (ch === delim) {
+      cells.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  cells.push(cur);
+  return cells;
+}
+
 function parseClipboard(text: string) {
-  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const normalized = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const lines = normalized.split("\n");
   if (lines.length && lines[lines.length - 1] === "") lines.pop();
   if (lines.length === 0) return [] as string[][];
   const hasTab = lines.some((l) => l.includes("\t"));
   if (hasTab) return lines.map(parseTsvLine);
-  return lines.map((line) => {
-    if (!line.includes(",") || !line.includes('"')) return [line];
-    const cells: string[] = [];
-    let cur = "";
-    let quoted = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (quoted) {
-        if (ch === '"' && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else if (ch === '"') quoted = false;
-        else cur += ch;
-        continue;
-      }
-      if (ch === '"') quoted = true;
-      else if (ch === ",") {
-        cells.push(cur);
-        cur = "";
-      } else cur += ch;
+  const sample = lines.slice(0, 12);
+  const commaHits = sample.filter((l) => splitDelimited(l, ",").length >= 2).length;
+  const semiHits = sample.filter((l) => splitDelimited(l, ";").length >= 2).length;
+  if (semiHits > commaHits && semiHits > 0) return lines.map((l) => splitDelimited(l, ";"));
+  if (commaHits > 0) return lines.map((l) => splitDelimited(l, ","));
+  return lines.map((line) => [line]);
+}
+
+const COL_ALIASES: Record<string, SheetColId> = {
+  mail: "email",
+  email: "email",
+  "e-mail": "email",
+  login: "email",
+  user: "email",
+  username: "email",
+  password: "password",
+  pass: "password",
+  pwd: "password",
+  phone: "phone",
+  tel: "phone",
+  mobile: "phone",
+  first_name: "first_name",
+  firstname: "first_name",
+  first: "first_name",
+  prenom: "first_name",
+  last_name: "last_name",
+  lastname: "last_name",
+  last: "last_name",
+  nom: "last_name",
+  birth_date: "birth_date",
+  birthdate: "birth_date",
+  dob: "birth_date",
+  birthday: "birth_date",
+  notes: "notes",
+  note: "notes",
+  comment: "notes",
+  status: "status",
+};
+
+function headerCols(cells: string[]): Array<SheetColId | null> {
+  return cells.map((c) => COL_ALIASES[(c ?? "").trim().toLowerCase()] ?? null);
+}
+
+function isHeaderGridRow(cells: string[] | undefined) {
+  if (!cells?.length) return false;
+  return headerCols(cells).some(Boolean);
+}
+
+function applyNewField(acc: ParsedAccount, col: SheetColId, raw: string) {
+  const value = raw.trim();
+  if (col === "email") {
+    if (value.includes(":") && value.includes("@") && !acc.password) {
+      const i = value.indexOf(":");
+      acc.login = value.slice(0, i).trim();
+      acc.password = value.slice(i + 1).trim() || null;
+    } else {
+      acc.login = value;
     }
-    cells.push(cur);
-    return cells.length > 1 ? cells : [line];
-  });
+    return;
+  }
+  if (col === "password") acc.password = value || null;
+  else if (col === "phone") acc.phone = value || null;
+  else if (col === "first_name") acc.firstName = value || null;
+  else if (col === "last_name") acc.lastName = value || null;
+  else if (col === "birth_date") acc.birthDate = value || null;
+  else if (col === "notes") acc.notes = value || null;
+  else if (col === "status" && STATUSES.has(value.toLowerCase())) {
+    acc.status = value.toLowerCase() as AccountStatus;
+  }
+}
+
+function gridToNewAccounts(grid: string[][], fallbackCols: SheetColId[]): ParsedAccount[] {
+  if (!grid.length) return [];
+  const headed = isHeaderGridRow(grid[0]);
+  const cols = headed ? headerCols(grid[0]) : fallbackCols;
+  const start = headed ? 1 : 0;
+  const out: ParsedAccount[] = [];
+  for (let i = start; i < grid.length; i++) {
+    const acc: ParsedAccount = {
+      login: "",
+      password: null,
+      phone: null,
+      firstName: null,
+      lastName: null,
+      birthDate: null,
+      notes: null,
+    };
+    const cells = grid[i];
+    for (let j = 0; j < cells.length; j++) {
+      const col = headed ? (cols as Array<SheetColId | null>)[j] : fallbackCols[j];
+      if (!col) continue;
+      applyNewField(acc, col, cells[j] ?? "");
+    }
+    if (acc.login) out.push(acc);
+  }
+  return out;
+}
+
+function textToNewAccounts(text: string, fallbackCols: SheetColId[]): ParsedAccount[] {
+  const grid = parseClipboard(text);
+  if (grid.some((row) => row.length >= 2) || isHeaderGridRow(grid[0])) {
+    return gridToNewAccounts(grid, fallbackCols);
+  }
+  return parseAccountLines(text);
+}
+
+function looksLikeImport(grid: string[][]) {
+  if (grid.length >= 2) return true;
+  if ((grid[0]?.length ?? 0) >= 2) return true;
+  const only = grid[0]?.[0] ?? "";
+  return only.includes("@") && only.includes(":");
 }
 
 function patchFromCol(
@@ -225,12 +336,14 @@ function AccountsSheet({
   onStatus,
   onDelete,
   onPatch,
+  onAdd,
 }: {
   siteId: string;
   rows: AccountRow[];
   onStatus: (id: string, status: AccountStatus) => void;
   onDelete: (id: string) => void;
   onPatch: (id: string, data: Partial<AccountRow>) => void;
+  onAdd: (entries: ParsedAccount[]) => void;
 }) {
   const colsKey = `carbon-sheet-cols:${siteId}`;
   const colorsKey = `carbon-sheet-colors:${siteId}`;
@@ -252,6 +365,7 @@ function AccountsSheet({
   const editingRef = useRef<{ r: number; c: number } | null>(null);
   const rowsRef = useRef(rows);
   const colsRef = useRef<(typeof SHEET_COLUMNS)[number][]>([]);
+  const onAddRef = useRef(onAdd);
 
   const [visible, setVisible] = useState<SheetColId[]>(() => readJson(colsKey, DEFAULT_COLS));
   const [colors, setColors] = useState<Record<string, SheetColorId>>(() => readJson(colorsKey, {}));
@@ -280,6 +394,7 @@ function AccountsSheet({
   editingRef.current = editing;
   rowsRef.current = rows;
   colsRef.current = cols;
+  onAddRef.current = onAdd;
   const canUndo = histTick >= 0 && undoStack.current.length > 0;
   const canRedo = histTick >= 0 && redoStack.current.length > 0;
 
@@ -570,13 +685,35 @@ function AccountsSheet({
     return lines.join("\n");
   }
 
+  function importPasted(text: string) {
+    const fallback = colsRef.current.map((c) => c.id);
+    const entries = textToNewAccounts(text, fallback.length ? fallback : ["email", "password"]);
+    if (!entries.length) return false;
+    const used = new Set<SheetColId>();
+    for (const row of parseClipboard(text).slice(0, 1)) {
+      for (const col of headerCols(row)) if (col) used.add(col);
+    }
+    if (used.size) {
+      setVisible((prev) => {
+        const next = SHEET_COLUMNS.map((c) => c.id).filter((id) => prev.includes(id) || used.has(id));
+        writeJson(colsKey, next);
+        return next;
+      });
+    }
+    onAddRef.current(entries);
+    return true;
+  }
+
   function applyPaste(text: string) {
     if (editingRef.current) return;
-    const current = selRef.current;
-    if (!current) return;
-    const area = bounds(current.a, current.b);
     const grid = parseClipboard(text);
     if (!grid.length) return;
+    const current = selRef.current;
+    if (!current || looksLikeImport(grid)) {
+      importPasted(text);
+      return;
+    }
+    const area = bounds(current.a, current.b);
     const list = rowsRef.current;
     const visibleCols = colsRef.current;
     const single = grid.length === 1 && grid[0].length === 1;
@@ -652,7 +789,7 @@ function AccountsSheet({
         if (tsv) void navigator.clipboard.writeText(tsv).catch(() => undefined);
         return;
       }
-      if (cmd && ev.code === "KeyV" && selRef.current && !editingRef.current && !inField(ev.target)) {
+      if (cmd && ev.code === "KeyV" && !editingRef.current && !inField(ev.target)) {
         ev.preventDefault();
         void navigator.clipboard
           .readText()
@@ -670,7 +807,7 @@ function AccountsSheet({
     }
 
     function onPaste(ev: ClipboardEvent) {
-      if (editingRef.current || !selRef.current || inField(ev.target)) return;
+      if (editingRef.current || inField(ev.target)) return;
       const text = ev.clipboardData?.getData("text/plain");
       if (text == null) return;
       ev.preventDefault();
@@ -689,9 +826,15 @@ function AccountsSheet({
 
   if (rows.length === 0) {
     return (
-      <p className="px-5 py-12 text-center text-sm text-[var(--carbon-text-muted)]">
-        No accounts match this filter.
-      </p>
+      <div
+        tabIndex={0}
+        onPointerDown={(e) => (e.currentTarget as HTMLDivElement).focus()}
+        className="outline-none"
+      >
+        <p className="px-5 py-12 text-center text-sm text-[var(--carbon-text-muted)]">
+          No rows. Ctrl+V to paste accounts (email, password, phone, first_name, last_name…).
+        </p>
+      </div>
     );
   }
 

@@ -18,10 +18,8 @@ export function unauthorized() {
 }
 
 const ADMIN_IDS = new Set(
-  [
-    ...(process.env.ADMIN_DISCORD_IDS || "").split(","),
-    ...(process.env.NEXT_PUBLIC_ADMIN_DISCORD_IDS || "").split(","),
-  ]
+  (process.env.ADMIN_DISCORD_IDS || "")
+    .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
 );

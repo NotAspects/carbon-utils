@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Download, FileUp, Loader2, Search, ShieldAlert } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
-import { ACCOUNT_STATUSES, PLATFORM_CATALOG, isTicketmasterSlug, logoContain, logoFor, type AccountStatus } from "@/lib/sites";
+import { ACCOUNT_STATUSES, PLATFORM_CATALOG, isTicketmasterSlug, logoContain, logoFor, type AccountStatus, type ParsedAccount } from "@/lib/sites";
 import PlatformGrid from "./PlatformGrid";
 import ExportCsv from "./ExportCsv";
 import AccountsSheet from "./AccountsSheet";
@@ -140,6 +140,27 @@ export default function AccountsManager() {
     setSelectedSlug(null);
     setOpenGroup(null);
     setAccounts([]);
+  }
+
+  async function importEntries(entries: ParsedAccount[]) {
+    if (!siteId || entries.length === 0) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, entries }),
+      });
+      const data = (await res.json()) as { added?: number; error?: string };
+      if (!res.ok) {
+        notify(data.error || "Import failed");
+        return;
+      }
+      await Promise.all([loadAccounts(siteId, true), loadSites(true)]);
+      notify(`${data.added} account${data.added === 1 ? "" : "s"} added`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function importText(text: string) {
@@ -393,10 +414,6 @@ export default function AccountsManager() {
                   <div className="flex justify-center py-16">
                     <Loader2 className="h-6 w-6 animate-spin text-[var(--carbon-text-muted)]" />
                   </div>
-                ) : accounts.length === 0 ? (
-                  <p className="px-5 py-12 text-center text-sm text-[var(--carbon-text-muted)]">
-                    No accounts yet. Import a CSV to get started.
-                  </p>
                 ) : (
                   <div className="p-2">
                     <AccountsSheet
@@ -406,6 +423,7 @@ export default function AccountsManager() {
                       onStatus={setStatus}
                       onDelete={deleteAccount}
                       onPatch={patchAccount}
+                      onAdd={importEntries}
                     />
                   </div>
                 )}

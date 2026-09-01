@@ -158,6 +158,7 @@ export type ParsedAccount = {
   lastName: string | null;
   birthDate: string | null;
   notes: string | null;
+  status?: AccountStatus;
 };
 
 function emptyToNull(v: string | undefined | null) {

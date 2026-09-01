@@ -4,10 +4,8 @@ import { getToken } from "next-auth/jwt";
 const PUBLIC = ["/login"];
 
 const ADMIN_IDS = new Set(
-  [
-    ...(process.env.ADMIN_DISCORD_IDS || "").split(","),
-    ...(process.env.NEXT_PUBLIC_ADMIN_DISCORD_IDS || "").split(","),
-  ]
+  (process.env.ADMIN_DISCORD_IDS || "")
+    .split(",")
     .map((id) => id.trim())
     .filter(Boolean)
 );
@@ -20,9 +18,10 @@ export async function middleware(req: NextRequest) {
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const allowed = Boolean(token?.sub && (ADMIN_IDS.size === 0 || ADMIN_IDS.has(token.sub)));
 
   if (PUBLIC.some((p) => path === p || path.startsWith(p + "/"))) {
-    if (token && path === "/login") {
+    if (token && allowed && path === "/login") {
       return NextResponse.redirect(new URL("/accounts", req.url));
     }
     return NextResponse.next();
@@ -31,13 +30,14 @@ export async function middleware(req: NextRequest) {
   if (!token?.sub) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
   if (ADMIN_IDS.size > 0 && !ADMIN_IDS.has(token.sub)) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("denied", "1");
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

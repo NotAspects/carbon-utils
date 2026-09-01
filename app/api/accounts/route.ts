@@ -51,6 +51,16 @@ export async function POST(req: NextRequest) {
     notes?: string | null;
     status?: string;
     bulk?: string;
+    entries?: Array<{
+      login?: string;
+      password?: string | null;
+      phone?: string | null;
+      firstName?: string | null;
+      lastName?: string | null;
+      birthDate?: string | null;
+      notes?: string | null;
+      status?: string;
+    }>;
   };
 
   const siteId = body.siteId?.trim();
@@ -59,13 +69,25 @@ export async function POST(req: NextRequest) {
   const site = await prisma.site.findUnique({ where: { id: siteId } });
   if (!site) return NextResponse.json({ error: "site not found" }, { status: 404 });
 
-  if (body.bulk != null) {
-    const rows = parseAccountLines(body.bulk);
-    if (rows.length === 0) {
+  const bulkRows =
+    body.entries?.map((r) => ({
+      login: (r.login ?? "").trim(),
+      password: r.password?.trim() || null,
+      phone: r.phone?.trim() || null,
+      firstName: r.firstName?.trim() || null,
+      lastName: r.lastName?.trim() || null,
+      birthDate: r.birthDate?.trim() || null,
+      notes: r.notes?.trim() || null,
+      status: isStatus(r.status) ? r.status : "active",
+    })).filter((r) => r.login) ??
+    (body.bulk != null ? parseAccountLines(body.bulk).map((r) => ({ ...r, status: "active" as const })) : null);
+
+  if (bulkRows) {
+    if (bulkRows.length === 0) {
       return NextResponse.json({ error: "no valid accounts" }, { status: 400 });
     }
     const created = await prisma.account.createMany({
-      data: rows.map((r) => ({
+      data: bulkRows.map((r) => ({
         siteId,
         login: r.login,
         password: r.password,
@@ -74,7 +96,7 @@ export async function POST(req: NextRequest) {
         lastName: r.lastName,
         birthDate: r.birthDate,
         notes: r.notes,
-        status: "active",
+        status: r.status ?? "active",
       })),
     });
     return NextResponse.json({ added: created.count });
