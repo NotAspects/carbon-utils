@@ -17,15 +17,17 @@ export function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
-export function isAdmin(discordId?: string) {
-  if (!discordId) return false;
-  const ids = [
+const ADMIN_IDS = new Set(
+  [
     ...(process.env.ADMIN_DISCORD_IDS || "").split(","),
     ...(process.env.NEXT_PUBLIC_ADMIN_DISCORD_IDS || "").split(","),
   ]
     .map((s) => s.trim())
-    .filter(Boolean);
-  return ids.includes(discordId);
+    .filter(Boolean)
+);
+
+export function isAdmin(discordId?: string) {
+  return Boolean(discordId && ADMIN_IDS.has(discordId));
 }
 
 export async function requireAdmin() {

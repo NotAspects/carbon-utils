@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Globe, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
+import { Globe, Inbox, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
 import { useState, useEffect } from "react";
 import { prefetchPath } from "@/lib/vaultCache";
 
@@ -14,17 +14,21 @@ type NavItem = {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  group: "vault";
+  group: "vault" | "mail";
 };
 
 const NAV: NavItem[] = [
   { name: "Accounts", href: "/accounts", icon: Users, group: "vault" },
-  { name: "Mails", href: "/mails", icon: Mail, group: "vault" },
   { name: "ISP", href: "/isp", icon: Globe, group: "vault" },
   { name: "API keys", href: "/keys", icon: KeyRound, group: "vault" },
+  { name: "Mails", href: "/mails", icon: Mail, group: "mail" },
+  { name: "Inbox", href: "/inbox", icon: Inbox, group: "mail" },
 ];
 
-const GROUPS: { id: NavItem["group"]; label: string }[] = [{ id: "vault", label: "Vault" }];
+const GROUPS: { id: NavItem["group"]; label: string }[] = [
+  { id: "vault", label: "Vault" },
+  { id: "mail", label: "Mail" },
+];
 
 function linkActive(pathname: string, href: string) {
   if (href === "/accounts") return pathname === "/" || pathname === "/accounts" || pathname.startsWith("/accounts/");

@@ -17,6 +17,10 @@ const PAGES: Record<string, { title: string; subtitle: string }> = {
     title: "API keys",
     subtitle: "Pick a provider to view the key and live balance.",
   },
+  inbox: {
+    title: "Inbox",
+    subtitle: "To shows the associated address, not the Gmail forward.",
+  },
 };
 
 export default function PageHeader({ page }: { page: keyof typeof PAGES }) {

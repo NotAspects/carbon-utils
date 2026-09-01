@@ -17,9 +17,23 @@ export async function GET(req: NextRequest) {
   const accounts = await prisma.account.findMany({
     where: { siteId },
     orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      siteId: true,
+      login: true,
+      password: true,
+      phone: true,
+      firstName: true,
+      lastName: true,
+      birthDate: true,
+      notes: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
-  return NextResponse.json({ accounts });
+  return NextResponse.json({ accounts }, { headers: { "Cache-Control": "private, max-age=8" } });
 }
 
 export async function POST(req: NextRequest) {

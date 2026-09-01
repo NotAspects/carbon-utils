@@ -23,7 +23,7 @@ export async function GET() {
   const [sites, grouped] = await Promise.all([
     prisma.site.findMany({
       orderBy: { createdAt: "asc" },
-      include: { _count: { select: { accounts: true } } },
+      select: { id: true, slug: true, name: true, createdAt: true },
     }),
     prisma.account.groupBy({
       by: ["siteId", "status"],
@@ -36,22 +36,29 @@ export async function GET() {
     (bySite[g.siteId] ??= {})[g.status] = g._count._all;
   }
 
-  return NextResponse.json({
-    sites: sites.map((site) => {
-      const byStatus = bySite[site.id] ?? {};
-      return {
-        id: site.id,
-        slug: site.slug,
-        name: site.name,
-        createdAt: site.createdAt,
-        total: site._count.accounts,
-        active: byStatus.active ?? 0,
-        used: byStatus.used ?? 0,
-        banned: byStatus.banned ?? 0,
-        inactive: byStatus.inactive ?? 0,
-      };
-    }),
-  });
+  return NextResponse.json(
+    {
+      sites: sites.map((site) => {
+        const byStatus = bySite[site.id] ?? {};
+        const active = byStatus.active ?? 0;
+        const used = byStatus.used ?? 0;
+        const banned = byStatus.banned ?? 0;
+        const inactive = byStatus.inactive ?? 0;
+        return {
+          id: site.id,
+          slug: site.slug,
+          name: site.name,
+          createdAt: site.createdAt,
+          total: active + used + banned + inactive,
+          active,
+          used,
+          banned,
+          inactive,
+        };
+      }),
+    },
+    { headers: { "Cache-Control": "private, max-age=15" } }
+  );
 }
 
 export async function POST(req: NextRequest) {

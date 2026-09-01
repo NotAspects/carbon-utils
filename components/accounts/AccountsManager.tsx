@@ -1,23 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowLeft,
-  Check,
-  Copy,
-  Download,
-  Eye,
-  EyeOff,
-  FileUp,
-  Loader2,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, Download, FileUp, Loader2, Search } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { ACCOUNT_STATUSES, PLATFORM_CATALOG, logoContain, logoFor, type AccountStatus } from "@/lib/sites";
 import PlatformGrid from "./PlatformGrid";
 import ExportCsv from "./ExportCsv";
-import { fetchJson, peekCache } from "@/lib/vaultCache";
+import AccountsSheet from "./AccountsSheet";
+import { fetchJson, peekCache, setCache } from "@/lib/vaultCache";
 
 export type SiteRow = {
   id: string;
@@ -46,44 +36,45 @@ export type AccountRow = {
   updatedAt: string;
 };
 
-const STATUS_STYLE: Record<AccountStatus, string> = {
-  active: "bg-emerald-400/10 text-emerald-400 border-emerald-400/20",
-  used: "bg-[var(--carbon-bg-hover)] text-[var(--carbon-text-secondary)] border-[var(--carbon-border)]",
-  banned: "bg-[var(--carbon-error)]/15 text-[var(--carbon-error)] border-[var(--carbon-error)]/20",
-  inactive: "bg-[var(--carbon-bg-hover)] text-[var(--carbon-text-muted)] border-[var(--carbon-border)]",
-};
-
 export default function AccountsManager() {
   const [sites, setSites] = useState<SiteRow[]>(() => peekCache<{ sites: SiteRow[] }>("sites")?.sites ?? []);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [loadingSites, setLoadingSites] = useState(() => !peekCache("sites"));
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState<AccountStatus | "all">("all");
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState<Set<string>>(new Set());
-  const [copied, setCopied] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const selected = sites.find((s) => s.slug === selectedSlug) ?? null;
+  const selected = useMemo(() => sites.find((s) => s.slug === selectedSlug) ?? null, [sites, selectedSlug]);
   const siteId = selected?.id ?? null;
 
-  const loadSites = useCallback(async () => {
-    const data = await fetchJson<{ sites: SiteRow[] }>("sites", "/api/sites", true);
+  const loadSites = useCallback(async (force = false) => {
+    const data = await fetchJson<{ sites: SiteRow[] }>("sites", "/api/sites", force);
     if (data?.sites) setSites(data.sites);
     setLoadingSites(false);
   }, []);
 
-  const loadAccounts = useCallback(async (id: string) => {
-    setLoadingAccounts(true);
+  const loadAccounts = useCallback(async (id: string, force = false) => {
+    const key = `accounts:${id}`;
+    const cached = peekCache<{ accounts: AccountRow[] }>(key);
+    if (cached?.accounts && !force) {
+      setAccounts(cached.accounts);
+      setLoadingAccounts(false);
+    } else {
+      setLoadingAccounts(true);
+    }
     try {
-      const res = await fetch(`/api/accounts?siteId=${encodeURIComponent(id)}`);
-      if (!res.ok) return;
-      const data = (await res.json()) as { accounts: AccountRow[] };
-      setAccounts(data.accounts);
+      const data = await fetchJson<{ accounts: AccountRow[] }>(
+        key,
+        `/api/accounts?siteId=${encodeURIComponent(id)}`,
+        force
+      );
+      if (data?.accounts) setAccounts(data.accounts);
     } finally {
       setLoadingAccounts(false);
     }
@@ -92,6 +83,11 @@ export default function AccountsManager() {
   useEffect(() => {
     loadSites();
   }, [loadSites]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 120);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
     if (!siteId) {
@@ -120,8 +116,11 @@ export default function AccountsManager() {
   function pickSlug(slug: string) {
     setSelectedSlug(slug);
     setSearch("");
+    setSearchInput("");
     setStatusFilter("all");
-    setAccounts([]);
+    const site = sites.find((s) => s.slug === slug);
+    const cached = site ? peekCache<{ accounts: AccountRow[] }>(`accounts:${site.id}`) : undefined;
+    setAccounts(cached?.accounts ?? []);
   }
 
   function goBack() {
@@ -149,7 +148,7 @@ export default function AccountsManager() {
         notify(data.error || "Import failed");
         return;
       }
-      await Promise.all([loadAccounts(siteId), loadSites()]);
+      await Promise.all([loadAccounts(siteId, true), loadSites(true)]);
       notify(`${data.added} account${data.added === 1 ? "" : "s"} added`);
     } finally {
       setBusy(false);
@@ -163,42 +162,36 @@ export default function AccountsManager() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  async function setStatus(id: string, status: AccountStatus) {
-    if (!siteId) return;
-    setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+  const persistAccounts = useCallback((id: string, next: AccountRow[]) => {
+    setCache(`accounts:${id}`, { accounts: next });
+    return next;
+  }, []);
+
+  const setStatus = useCallback(async (id: string, status: AccountStatus) => {
+    setAccounts((prev) => persistAccounts(siteId ?? prev[0]?.siteId ?? "", prev.map((a) => (a.id === id ? { ...a, status } : a))));
     await fetch(`/api/accounts/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    loadSites();
-  }
+  }, [persistAccounts, siteId]);
 
-  async function deleteAccount(id: string) {
-    if (!siteId) return;
-    if (!confirm("Delete this account?")) return;
+  const deleteAccount = useCallback(async (id: string) => {
+    setAccounts((prev) => persistAccounts(siteId ?? prev[0]?.siteId ?? "", prev.filter((a) => a.id !== id)));
     await fetch(`/api/accounts/${id}`, { method: "DELETE" });
-    setAccounts((prev) => prev.filter((a) => a.id !== id));
-    loadSites();
-  }
+  }, [persistAccounts, siteId]);
 
-  function toggleReveal(id: string) {
-    setRevealed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const patchAccount = useCallback(async (id: string, data: Partial<AccountRow>) => {
+    setAccounts((prev) => persistAccounts(siteId ?? prev[0]?.siteId ?? "", prev.map((a) => (a.id === id ? { ...a, ...data } : a))));
+    await fetch(`/api/accounts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
-  }
-
-  async function copyValue(key: string, value: string) {
-    await navigator.clipboard.writeText(value);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 1200);
-  }
+  }, [persistAccounts, siteId]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
+    <div className={`mx-auto px-4 py-6 lg:px-6 ${selected ? "max-w-[1600px]" : "max-w-6xl"}`}>
       <PageHeader page="accounts" />
 
       {loadingSites ? (
@@ -293,8 +286,8 @@ export default function AccountsManager() {
                 <div className="relative min-w-[200px] flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--carbon-text-muted)]" />
                   <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     placeholder="Search login, name, phone…"
                     className="carbon-input py-2 pl-8 text-[13px]"
                   />
@@ -326,116 +319,25 @@ export default function AccountsManager() {
                   <div className="flex justify-center py-16">
                     <Loader2 className="h-6 w-6 animate-spin text-[var(--carbon-text-muted)]" />
                   </div>
-                ) : shown.length === 0 ? (
+                ) : accounts.length === 0 ? (
                   <p className="px-5 py-12 text-center text-sm text-[var(--carbon-text-muted)]">
-                    {accounts.length === 0
-                      ? "No accounts yet. Import a CSV to get started."
-                      : "No accounts match this filter."}
+                    No accounts yet. Import a CSV to get started.
                   </p>
                 ) : (
-                  <div className="divide-y divide-[var(--carbon-border)]">
-                    {shown.map((a) => (
-                      <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <p className="truncate font-mono text-[13px] text-[var(--carbon-text)]">{a.login}</p>
-                            <CopyBtn
-                              ok={copied === `${a.id}-login`}
-                              onClick={() => copyValue(`${a.id}-login`, a.login)}
-                            />
-                          </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                            {a.password ? (
-                              <span className="inline-flex items-center gap-1">
-                                <span
-                                  className={`select-none font-mono text-[11px] ${
-                                    revealed.has(a.id)
-                                      ? "text-white"
-                                      : "tracking-widest text-[var(--carbon-text-muted)]"
-                                  }`}
-                                >
-                                  {revealed.has(a.id) ? a.password : "••••••"}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleReveal(a.id)}
-                                  className="text-[var(--carbon-text-muted)] hover:text-white"
-                                  title={revealed.has(a.id) ? "Hide" : "Show"}
-                                >
-                                  {revealed.has(a.id) ? (
-                                    <EyeOff className="h-3 w-3" />
-                                  ) : (
-                                    <Eye className="h-3 w-3" />
-                                  )}
-                                </button>
-                                <CopyBtn
-                                  ok={copied === `${a.id}-pass`}
-                                  onClick={() => copyValue(`${a.id}-pass`, a.password!)}
-                                />
-                              </span>
-                            ) : (
-                              <span className="text-[11px] italic text-[var(--carbon-text-muted)]">
-                                no password
-                              </span>
-                            )}
-                            {(a.firstName || a.lastName) && (
-                              <span className="text-[11px] text-[var(--carbon-text-secondary)]">
-                                {[a.firstName, a.lastName].filter(Boolean).join(" ")}
-                              </span>
-                            )}
-                            {a.phone && (
-                              <span className="font-mono text-[11px] text-[var(--carbon-text-muted)]">
-                                {a.phone}
-                              </span>
-                            )}
-                            {a.notes && (
-                              <span className="truncate text-[11px] text-[var(--carbon-text-muted)]">
-                                {a.notes}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={a.status}
-                            onChange={(e) => setStatus(a.id, e.target.value as AccountStatus)}
-                            className={`rounded-md border px-1.5 py-1 text-[10px] font-medium capitalize ${STATUS_STYLE[a.status]} bg-transparent`}
-                          >
-                            {ACCOUNT_STATUSES.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => deleteAccount(a.id)}
-                            className="rounded-lg p-1.5 text-[var(--carbon-text-muted)] hover:bg-[var(--carbon-bg-hover)] hover:text-[var(--carbon-error)]"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="p-2">
+                    <AccountsSheet
+                      key={siteId}
+                      siteId={siteId!}
+                      rows={shown}
+                      onStatus={setStatus}
+                      onDelete={deleteAccount}
+                      onPatch={patchAccount}
+                    />
                   </div>
                 )}
               </div>
         </section>
       )}
     </div>
-  );
-}
-
-function CopyBtn({ ok, onClick }: { ok: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[var(--carbon-text-muted)] hover:text-emerald-400"
-      title="Copy"
-    >
-      {ok ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-    </button>
   );
 }

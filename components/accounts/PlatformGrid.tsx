@@ -14,6 +14,7 @@ import {
   Ticket,
   Trophy,
 } from "lucide-react";
+import { useMemo } from "react";
 import type { CatalogPlatform } from "@/lib/sites";
 import { PLATFORM_CATALOG, logoContain, logoFor } from "@/lib/sites";
 import type { SiteRow } from "./AccountsManager";
@@ -33,9 +34,9 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   dice: Dices,
 };
 
-function countFor(platform: CatalogPlatform, sites: SiteRow[]) {
+function countFor(platform: CatalogPlatform, bySlug: Map<string, SiteRow>) {
   const slugs = platform.children?.map((c) => c.slug) ?? (platform.slug ? [platform.slug] : []);
-  return slugs.reduce((sum, slug) => sum + (sites.find((s) => s.slug === slug)?.total ?? 0), 0);
+  return slugs.reduce((sum, slug) => sum + (bySlug.get(slug)?.total ?? 0), 0);
 }
 
 function Card({
@@ -103,6 +104,7 @@ export default function PlatformGrid({
   onPickPlatform: (platform: CatalogPlatform) => void;
   onPickSlug: (slug: string) => void;
 }) {
+  const bySlug = useMemo(() => new Map(sites.map((s) => [s.slug, s])), [sites]);
   const group = PLATFORM_CATALOG.find((p) => p.id === groupId) ?? null;
 
   if (group?.children) {
@@ -123,7 +125,7 @@ export default function PlatformGrid({
               key={child.slug}
               title={child.short}
               subtitle={child.name}
-              count={sites.find((s) => s.slug === child.slug)?.total ?? 0}
+              count={bySlug.get(child.slug)?.total ?? 0}
               logo={logoFor(child.slug) ?? logoFor(group.id)}
               contain={logoContain(child.slug) || logoContain(group.id)}
               icon={ICONS[group.id]}
@@ -147,7 +149,7 @@ export default function PlatformGrid({
             key={platform.id}
             title={platform.name}
             subtitle={subtitle}
-            count={countFor(platform, sites)}
+            count={countFor(platform, bySlug)}
             logo={logoFor(platform.id) ?? (platform.slug ? logoFor(platform.slug) : null)}
             contain={logoContain(platform.id) || (platform.slug ? logoContain(platform.slug) : false)}
             icon={ICONS[platform.id]}

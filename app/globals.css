@@ -102,4 +102,30 @@
 
   .glow-primary { box-shadow: 0 0 20px rgba(255, 255, 255, 0.08); }
   .glow-accent { box-shadow: 0 0 20px rgba(255, 255, 255, 0.05); }
+
+  .sheet-c-green { background: #14532d; color: #bbf7d0; }
+  .sheet-c-yellow { background: #713f12; color: #fef08a; }
+  .sheet-c-orange { background: #7c2d12; color: #fed7aa; }
+  .sheet-c-red { background: #7f1d1d; color: #fecaca; }
+  .sheet-c-blue { background: #1e3a8a; color: #bfdbfe; }
+  .sheet-c-purple { background: #581c87; color: #e9d5ff; }
+  .sheet-c-pink { background: #9d174d; color: #fbcfe8; }
+  .sheet-c-gray { background: #3f3f46; color: #e4e4e7; }
+
+  .sheet-grid {
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: cell;
+  }
+  .sheet-grid th,
+  .sheet-grid td {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .sheet-focus {
+    outline: 2px solid #8ab4f8;
+    outline-offset: -2px;
+    position: relative;
+    z-index: 1;
+  }
 }

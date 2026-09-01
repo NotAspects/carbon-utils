@@ -50,15 +50,15 @@ export default function ApiKeysManager() {
   const bal = selected ? balances[selected.slug] : null;
 
   const loadKeys = useCallback(async () => {
-    const data = await fetchJson<{ keys: KeyRow[] }>("keys", "/api/keys", true);
+    const data = await fetchJson<{ keys: KeyRow[] }>("keys", "/api/keys");
     if (data?.keys) setKeys(data.keys);
     setLoading(false);
   }, []);
 
-  const loadBalances = useCallback(async () => {
+  const loadBalances = useCallback(async (force = false) => {
     setLoadingBal(true);
     try {
-      const res = await fetch("/api/keys/balances");
+      const res = await fetch(force ? "/api/keys/balances?force=1" : "/api/keys/balances");
       if (!res.ok) return;
       const data = (await res.json()) as { balances: BalanceRow[] };
       const map: Record<string, BalanceRow> = {};
@@ -131,7 +131,7 @@ export default function ApiKeysManager() {
         {selected && (
           <button
             type="button"
-            onClick={loadBalances}
+            onClick={() => loadBalances(true)}
             disabled={loadingBal}
             className="carbon-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-[13px]"
           >

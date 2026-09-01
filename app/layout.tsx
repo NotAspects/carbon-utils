@@ -3,8 +3,6 @@ import SessionProvider from "@/components/SessionProvider";
 import AppShell from "@/components/AppShell";
 import "./globals.css";
 
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "Carbon Utils",
   description: "Carbon Utils",

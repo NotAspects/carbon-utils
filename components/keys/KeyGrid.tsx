@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ArrowLeft, KeyRound, MessageSquare, ScanSearch } from "lucide-react";
 import { API_PROVIDERS, KEY_GROUPS, type ApiGroup } from "@/lib/apiProviders";
 
@@ -70,8 +71,12 @@ function Card({
   );
 }
 
-function balanceLabel(slug: string, keys: KeyRow[], balances: Record<string, BalanceRow>) {
-  const row = keys.find((k) => k.slug === slug);
+function balanceLabel(
+  slug: string,
+  bySlug: Map<string, KeyRow>,
+  balances: Record<string, BalanceRow>
+) {
+  const row = bySlug.get(slug);
   const bal = balances[slug];
   const def = API_PROVIDERS.find((p) => p.slug === slug);
   if (!row?.apiKey) return "No key";
@@ -96,6 +101,7 @@ export default function KeyGrid({
   onPickGroup: (group: ApiGroup) => void;
   onPickSlug: (slug: string) => void;
 }) {
+  const bySlug = useMemo(() => new Map(keys.map((k) => [k.slug, k])), [keys]);
   const group = KEY_GROUPS.find((g) => g.id === groupId) ?? null;
 
   if (group) {
@@ -117,8 +123,8 @@ export default function KeyGrid({
               key={p.slug}
               title={p.name}
               subtitle={p.slug}
-              value={balanceLabel(p.slug, keys, balances)}
-              configured={Boolean(keys.find((k) => k.slug === p.slug)?.apiKey.trim())}
+              value={balanceLabel(p.slug, bySlug, balances)}
+              configured={Boolean(bySlug.get(p.slug)?.apiKey.trim())}
               icon={group.id === "sms" ? MessageSquare : ScanSearch}
               onClick={() => onPickSlug(p.slug)}
             />
@@ -132,7 +138,7 @@ export default function KeyGrid({
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {KEY_GROUPS.map((g) => {
         const slugs = API_PROVIDERS.filter((p) => p.group === g.id).map((p) => p.slug);
-        const saved = slugs.filter((slug) => keys.find((k) => k.slug === slug)?.apiKey.trim()).length;
+        const saved = slugs.filter((slug) => bySlug.get(slug)?.apiKey.trim()).length;
         return (
           <Card
             key={g.id}

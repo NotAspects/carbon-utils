@@ -17,7 +17,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (status === "authenticated") prefetchVault();
   }, [status, router]);
 
-  if (status === "loading" || status !== "authenticated") {
+  if (status === "unauthenticated") {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--carbon-bg)]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--carbon-border)] border-t-[var(--carbon-primary)]" />

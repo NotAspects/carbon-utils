@@ -33,23 +33,26 @@ export async function GET() {
     include: { _count: { select: { accounts: true } } },
   });
 
-  return NextResponse.json({
-    mailboxes: mailboxes.map((box) => ({
-      id: box.id,
-      slug: box.slug,
-      name: box.name,
-      email: box.email,
-      host: box.host,
-      port: box.port,
-      password: box.password,
-      kind: box.kind,
-      domain: box.domain,
-      notes: box.notes,
-      total: box._count.accounts,
-      active: box._count.accounts,
-      used: 0,
-      banned: 0,
-      inactive: 0,
-    })),
-  });
+  return NextResponse.json(
+    {
+      mailboxes: mailboxes.map((box) => ({
+        id: box.id,
+        slug: box.slug,
+        name: box.name,
+        email: box.email,
+        host: box.host,
+        port: box.port,
+        password: box.password,
+        kind: box.kind,
+        domain: box.domain,
+        notes: box.notes,
+        total: box._count.accounts,
+        active: box._count.accounts,
+        used: 0,
+        banned: 0,
+        inactive: 0,
+      })),
+    },
+    { headers: { "Cache-Control": "private, max-age=15" } }
+  );
 }

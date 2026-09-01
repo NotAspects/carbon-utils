@@ -20,7 +20,7 @@ export default function IspManager() {
     .filter(Boolean).length;
 
   const load = useCallback(async () => {
-    const data = await fetchJson<{ text?: string }>("proxies", "/api/proxies", true);
+    const data = await fetchJson<{ text?: string }>("proxies", "/api/proxies");
     const next = data?.text ?? "";
     setText(next);
     setSaved(next);

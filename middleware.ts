@@ -3,6 +3,15 @@ import { getToken } from "next-auth/jwt";
 
 const PUBLIC = ["/login"];
 
+const ADMIN_IDS = new Set(
+  [
+    ...(process.env.ADMIN_DISCORD_IDS || "").split(","),
+    ...(process.env.NEXT_PUBLIC_ADMIN_DISCORD_IDS || "").split(","),
+  ]
+    .map((id) => id.trim())
+    .filter(Boolean)
+);
+
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
@@ -25,14 +34,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const adminIds = [
-    ...(process.env.ADMIN_DISCORD_IDS || "").split(","),
-    ...(process.env.NEXT_PUBLIC_ADMIN_DISCORD_IDS || "").split(","),
-  ]
-    .map((id) => id.trim())
-    .filter(Boolean);
-
-  if (adminIds.length > 0 && !adminIds.includes(token.sub)) {
+  if (ADMIN_IDS.size > 0 && !ADMIN_IDS.has(token.sub)) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("denied", "1");

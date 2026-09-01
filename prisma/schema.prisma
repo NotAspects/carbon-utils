@@ -31,7 +31,7 @@ model Account {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([siteId])
+  @@index([siteId, status])
   @@index([status])
   @@index([login])
 }

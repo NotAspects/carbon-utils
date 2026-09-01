@@ -1,14 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import { ArrowLeft, Mail } from "lucide-react";
 import { MAIL_GROUPS, type MailGroup } from "@/lib/mailboxes";
 import type { MailboxRow } from "./MailboxesManager";
 
-function countFor(group: MailGroup, boxes: MailboxRow[]) {
-  return group.children.reduce(
-    (sum, child) => sum + (boxes.find((b) => b.slug === child.slug)?.total ?? 0),
-    0
-  );
+function countFor(group: MailGroup, bySlug: Map<string, MailboxRow>) {
+  return group.children.reduce((sum, child) => sum + (bySlug.get(child.slug)?.total ?? 0), 0);
 }
 
 function Card({
@@ -55,6 +53,7 @@ export default function MailGrid({
   onPickGroup: (group: MailGroup) => void;
   onPickSlug: (slug: string) => void;
 }) {
+  const bySlug = useMemo(() => new Map(mailboxes.map((b) => [b.slug, b])), [mailboxes]);
   const group = MAIL_GROUPS.find((g) => g.id === groupId) ?? null;
 
   if (group) {
@@ -75,7 +74,7 @@ export default function MailGrid({
               key={child.slug}
               title={child.short}
               subtitle={child.name}
-              count={mailboxes.find((b) => b.slug === child.slug)?.total ?? 0}
+              count={bySlug.get(child.slug)?.total ?? 0}
               onClick={() => onPickSlug(child.slug)}
             />
           ))}
@@ -91,7 +90,7 @@ export default function MailGrid({
           key={g.id}
           title={g.name}
           subtitle={`${g.children.length} ${g.hint?.toLowerCase() ?? "options"}`}
-          count={countFor(g, mailboxes)}
+          count={countFor(g, bySlug)}
           onClick={() => onPickGroup(g)}
         />
       ))}

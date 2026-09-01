@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json({ accounts });
+  return NextResponse.json({ accounts }, { headers: { "Cache-Control": "private, max-age=8" } });
 }
 
 export async function PUT(req: NextRequest) {

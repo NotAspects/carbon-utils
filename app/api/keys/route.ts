@@ -24,7 +24,7 @@ export async function GET() {
   if (!user) return unauthorized();
   await ensureCatalog();
   const keys = await prisma.apiKey.findMany({ orderBy: [{ group: "asc" }, { name: "asc" }] });
-  return NextResponse.json({ keys });
+  return NextResponse.json({ keys }, { headers: { "Cache-Control": "private, max-age=15" } });
 }
 
 export async function PATCH(req: NextRequest) {

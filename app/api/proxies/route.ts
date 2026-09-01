@@ -34,11 +34,10 @@ export async function GET() {
 
   try {
     const existing = await readList();
-    if (existing == null) {
-      await writeList("");
-      return NextResponse.json({ text: "" });
-    }
-    return NextResponse.json({ text: existing });
+    return NextResponse.json(
+      { text: existing ?? "" },
+      { headers: { "Cache-Control": "private, max-age=10" } }
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : "failed to load proxies";
     return NextResponse.json({ error: message }, { status: 500 });

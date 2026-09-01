@@ -55,18 +55,30 @@ export default function MailboxesManager() {
     .map((l) => l.trim())
     .filter(Boolean).length;
 
-  const loadMailboxes = useCallback(async () => {
-    const data = await fetchJson<{ mailboxes: MailboxRow[] }>("mailboxes", "/api/mailboxes", true);
+  const loadMailboxes = useCallback(async (force = false) => {
+    const data = await fetchJson<{ mailboxes: MailboxRow[] }>("mailboxes", "/api/mailboxes", force);
     if (data?.mailboxes) setMailboxes(data.mailboxes);
     setLoadingBoxes(false);
   }, []);
 
-  const loadMails = useCallback(async (id: string) => {
-    setLoadingMails(true);
+  const loadMails = useCallback(async (id: string, force = false) => {
+    const key = `mail-accounts:${id}`;
+    const cached = peekCache<{ accounts: MailAccountRow[] }>(key);
+    if (cached?.accounts && !force) {
+      const text = cached.accounts.map((a) => a.login).join("\n");
+      setMailText(text);
+      setSavedText(text);
+      setLoadingMails(false);
+    } else {
+      setLoadingMails(true);
+    }
     try {
-      const res = await fetch(`/api/mail-accounts?mailboxId=${encodeURIComponent(id)}`);
-      if (!res.ok) return;
-      const data = (await res.json()) as { accounts: MailAccountRow[] };
+      const data = await fetchJson<{ accounts: MailAccountRow[] }>(
+        key,
+        `/api/mail-accounts?mailboxId=${encodeURIComponent(id)}`,
+        force
+      );
+      if (!data?.accounts) return;
       const text = data.accounts.map((a) => a.login).join("\n");
       setMailText(text);
       setSavedText(text);
@@ -152,7 +164,7 @@ export default function MailboxesManager() {
         notify(data.error || "Could not save mails");
         return;
       }
-      await Promise.all([loadMails(mailboxId), loadMailboxes()]);
+      await Promise.all([loadMails(mailboxId, true), loadMailboxes(true)]);
       notify(`${data.count ?? 0} mail${data.count === 1 ? "" : "s"} saved`);
     } finally {
       setSavingMails(false);
