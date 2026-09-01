@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, Copy, Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { API_PROVIDERS, KEY_GROUPS, type ApiGroup } from "@/lib/apiProviders";
+import { fetchJson, peekCache } from "@/lib/vaultCache";
 import KeyGrid from "./KeyGrid";
 
 type KeyRow = {
@@ -32,9 +33,9 @@ function money(amount: number, currency: string | null) {
 }
 
 export default function ApiKeysManager() {
-  const [keys, setKeys] = useState<KeyRow[]>([]);
+  const [keys, setKeys] = useState<KeyRow[]>(() => peekCache<{ keys: KeyRow[] }>("keys")?.keys ?? []);
   const [balances, setBalances] = useState<Record<string, BalanceRow>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !peekCache("keys"));
   const [loadingBal, setLoadingBal] = useState(false);
   const [openGroup, setOpenGroup] = useState<ApiGroup | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -49,10 +50,8 @@ export default function ApiKeysManager() {
   const bal = selected ? balances[selected.slug] : null;
 
   const loadKeys = useCallback(async () => {
-    const res = await fetch("/api/keys");
-    if (!res.ok) return;
-    const data = (await res.json()) as { keys: KeyRow[] };
-    setKeys(data.keys);
+    const data = await fetchJson<{ keys: KeyRow[] }>("keys", "/api/keys", true);
+    if (data?.keys) setKeys(data.keys);
     setLoading(false);
   }, []);
 
@@ -71,8 +70,12 @@ export default function ApiKeysManager() {
   }, []);
 
   useEffect(() => {
-    loadKeys().then(() => loadBalances());
-  }, [loadKeys, loadBalances]);
+    loadKeys();
+  }, [loadKeys]);
+
+  useEffect(() => {
+    if (openGroup || selectedSlug) loadBalances();
+  }, [openGroup, selectedSlug, loadBalances]);
 
   useEffect(() => {
     setDraft("");

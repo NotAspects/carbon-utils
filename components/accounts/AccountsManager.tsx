@@ -17,6 +17,7 @@ import PageHeader from "@/components/PageHeader";
 import { ACCOUNT_STATUSES, PLATFORM_CATALOG, logoContain, logoFor, type AccountStatus } from "@/lib/sites";
 import PlatformGrid from "./PlatformGrid";
 import ExportCsv from "./ExportCsv";
+import { fetchJson, peekCache } from "@/lib/vaultCache";
 
 export type SiteRow = {
   id: string;
@@ -53,9 +54,9 @@ const STATUS_STYLE: Record<AccountStatus, string> = {
 };
 
 export default function AccountsManager() {
-  const [sites, setSites] = useState<SiteRow[]>([]);
+  const [sites, setSites] = useState<SiteRow[]>(() => peekCache<{ sites: SiteRow[] }>("sites")?.sites ?? []);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
-  const [loadingSites, setLoadingSites] = useState(true);
+  const [loadingSites, setLoadingSites] = useState(() => !peekCache("sites"));
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<AccountStatus | "all">("all");
@@ -71,10 +72,8 @@ export default function AccountsManager() {
   const siteId = selected?.id ?? null;
 
   const loadSites = useCallback(async () => {
-    const res = await fetch("/api/sites");
-    if (!res.ok) return;
-    const data = (await res.json()) as { sites: SiteRow[] };
-    setSites(data.sites);
+    const data = await fetchJson<{ sites: SiteRow[] }>("sites", "/api/sites", true);
+    if (data?.sites) setSites(data.sites);
     setLoadingSites(false);
   }, []);
 

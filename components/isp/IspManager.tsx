@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Download, Loader2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import { fetchJson, peekCache, setCache } from "@/lib/vaultCache";
 
 export default function IspManager() {
-  const [text, setText] = useState("");
-  const [saved, setSaved] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState(() => peekCache<{ text: string }>("proxies")?.text ?? "");
+  const [saved, setSaved] = useState(() => peekCache<{ text: string }>("proxies")?.text ?? "");
+  const [loading, setLoading] = useState(() => !peekCache("proxies"));
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
@@ -19,13 +20,8 @@ export default function IspManager() {
     .filter(Boolean).length;
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/proxies");
-    if (!res.ok) {
-      setLoading(false);
-      return;
-    }
-    const data = (await res.json()) as { text?: string };
-    const next = data.text ?? "";
+    const data = await fetchJson<{ text?: string }>("proxies", "/api/proxies", true);
+    const next = data?.text ?? "";
     setText(next);
     setSaved(next);
     setLoading(false);
@@ -60,6 +56,7 @@ export default function IspManager() {
         return;
       }
       setSaved(text);
+      setCache("proxies", { text });
       notify(`${data.count ?? 0} prox${data.count === 1 ? "y" : "ies"} saved`);
     } finally {
       setSaving(false);

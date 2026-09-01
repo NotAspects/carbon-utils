@@ -3,11 +3,15 @@ import { requireAdmin, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_SITES, slugify } from "@/lib/sites";
 
+let seeded = false;
+
 async function ensureDefaults() {
+  if (seeded) return;
   await prisma.site.createMany({
     data: DEFAULT_SITES.map((s) => ({ slug: s.slug, name: s.name })),
     skipDuplicates: true,
   });
+  seeded = true;
 }
 
 export async function GET() {
@@ -16,22 +20,25 @@ export async function GET() {
 
   await ensureDefaults();
 
-  const sites = await prisma.site.findMany({
-    orderBy: { createdAt: "asc" },
-    include: {
-      _count: { select: { accounts: true } },
-    },
-  });
+  const [sites, grouped] = await Promise.all([
+    prisma.site.findMany({
+      orderBy: { createdAt: "asc" },
+      include: { _count: { select: { accounts: true } } },
+    }),
+    prisma.account.groupBy({
+      by: ["siteId", "status"],
+      _count: { _all: true },
+    }),
+  ]);
 
-  const withStatus = await Promise.all(
-    sites.map(async (site) => {
-      const grouped = await prisma.account.groupBy({
-        by: ["status"],
-        where: { siteId: site.id },
-        _count: { _all: true },
-      });
-      const byStatus: Record<string, number> = {};
-      for (const g of grouped) byStatus[g.status] = g._count._all;
+  const bySite: Record<string, Record<string, number>> = {};
+  for (const g of grouped) {
+    (bySite[g.siteId] ??= {})[g.status] = g._count._all;
+  }
+
+  return NextResponse.json({
+    sites: sites.map((site) => {
+      const byStatus = bySite[site.id] ?? {};
       return {
         id: site.id,
         slug: site.slug,
@@ -43,10 +50,8 @@ export async function GET() {
         banned: byStatus.banned ?? 0,
         inactive: byStatus.inactive ?? 0,
       };
-    })
-  );
-
-  return NextResponse.json({ sites: withStatus });
+    }),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -66,5 +71,6 @@ export async function POST(req: NextRequest) {
   }
 
   const site = await prisma.site.create({ data: { name, slug } });
+  seeded = false;
   return NextResponse.json({ site });
 }

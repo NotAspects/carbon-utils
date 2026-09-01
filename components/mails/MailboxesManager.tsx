@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, Copy, Download, Eye, EyeOff, Loader2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { MAIL_GROUPS } from "@/lib/mailboxes";
+import { fetchJson, peekCache } from "@/lib/vaultCache";
 import MailGrid from "./MailGrid";
 
 export type MailboxRow = {
@@ -30,8 +31,10 @@ type MailAccountRow = {
 };
 
 export default function MailboxesManager() {
-  const [mailboxes, setMailboxes] = useState<MailboxRow[]>([]);
-  const [loadingBoxes, setLoadingBoxes] = useState(true);
+  const [mailboxes, setMailboxes] = useState<MailboxRow[]>(
+    () => peekCache<{ mailboxes: MailboxRow[] }>("mailboxes")?.mailboxes ?? []
+  );
+  const [loadingBoxes, setLoadingBoxes] = useState(() => !peekCache("mailboxes"));
   const [loadingMails, setLoadingMails] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -53,10 +56,8 @@ export default function MailboxesManager() {
     .filter(Boolean).length;
 
   const loadMailboxes = useCallback(async () => {
-    const res = await fetch("/api/mailboxes");
-    if (!res.ok) return;
-    const data = (await res.json()) as { mailboxes: MailboxRow[] };
-    setMailboxes(data.mailboxes);
+    const data = await fetchJson<{ mailboxes: MailboxRow[] }>("mailboxes", "/api/mailboxes", true);
+    if (data?.mailboxes) setMailboxes(data.mailboxes);
     setLoadingBoxes(false);
   }, []);
 

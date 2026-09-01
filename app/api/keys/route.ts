@@ -3,7 +3,10 @@ import { requireAdmin, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { API_PROVIDERS } from "@/lib/apiProviders";
 
+let seeded = false;
+
 async function ensureCatalog() {
+  if (seeded) return;
   await prisma.apiKey.createMany({
     data: API_PROVIDERS.map((p) => ({
       group: p.group,
@@ -13,6 +16,7 @@ async function ensureCatalog() {
     })),
     skipDuplicates: true,
   });
+  seeded = true;
 }
 
 export async function GET() {

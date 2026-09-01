@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { Globe, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
 import { useState, useEffect } from "react";
+import { prefetchPath } from "@/lib/vaultCache";
 
 const COLLAPSE_KEY = "carbon-utils-sidebar-collapsed";
 
@@ -126,6 +127,8 @@ export default function Sidebar() {
                       href={item.href}
                       className={itemClass(linkActive(pathname, item.href))}
                       title={compact ? item.name : undefined}
+                      onMouseEnter={() => prefetchPath(item.href)}
+                      onFocus={() => prefetchPath(item.href)}
                     >
                       <item.icon className="h-4 w-4 flex-shrink-0 opacity-90" />
                       {!compact && <span className="truncate">{item.name}</span>}

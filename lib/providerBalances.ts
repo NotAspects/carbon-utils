@@ -6,7 +6,7 @@ export type BalanceResult = {
   unsupported: boolean;
 };
 
-const TIMEOUT_MS = 10000;
+const TIMEOUT_MS = 4000;
 
 async function fetchText(url: string, init?: RequestInit) {
   const ctrl = new AbortController();

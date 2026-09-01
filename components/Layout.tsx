@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Sidebar from "./Sidebar";
+import { prefetchVault } from "@/lib/vaultCache";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
@@ -13,6 +14,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (status === "unauthenticated") {
       router.push("/login");
     }
+    if (status === "authenticated") prefetchVault();
   }, [status, router]);
 
   if (status === "loading" || status !== "authenticated") {
