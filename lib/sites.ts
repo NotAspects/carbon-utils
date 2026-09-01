@@ -15,7 +15,7 @@ export type CatalogPlatform = {
 export const PLATFORM_CATALOG: CatalogPlatform[] = [
   {
     id: "ticketmaster",
-    name: "Ticketmaster Global",
+    name: "Ticketmaster",
     hint: "Regions",
     children: [
       { slug: "ticketmaster-fr", name: "Ticketmaster FR", short: "FR" },

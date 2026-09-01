@@ -270,10 +270,12 @@ async function main() {
       notes: a.notes,
       status: "active",
     }));
+  let created = 0;
   if (rows.length) {
-    await prisma.account.createMany({ data: rows });
+    const res = await prisma.account.createMany({ data: rows });
+    created = res.count;
   }
-  console.log(`${rows.length} comptes importés dans « ${site.name} » (${accounts.length - rows.length} déjà présents ignorés).`);
+  console.log(`${created} comptes importés dans « ${site.name} » (${accounts.length - rows.length} déjà présents ignorés).`);
   await prisma.$disconnect();
 }
 
