@@ -44,16 +44,18 @@ export async function GET() {
         const used = byStatus.used ?? 0;
         const banned = byStatus.banned ?? 0;
         const inactive = byStatus.inactive ?? 0;
+        const kyc = byStatus.kyc ?? 0;
         return {
           id: site.id,
           slug: site.slug,
           name: site.name,
           createdAt: site.createdAt,
-          total: active + used + banned + inactive,
+          total: active + used + banned + inactive + kyc,
           active,
           used,
           banned,
           inactive,
+          kyc,
         };
       }),
     },

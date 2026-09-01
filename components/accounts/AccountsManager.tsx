@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, FileUp, Loader2, Search } from "lucide-react";
+import { ArrowLeft, Download, FileUp, Loader2, Search, ShieldAlert } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
-import { ACCOUNT_STATUSES, PLATFORM_CATALOG, logoContain, logoFor, type AccountStatus } from "@/lib/sites";
+import { ACCOUNT_STATUSES, PLATFORM_CATALOG, isTicketmasterSlug, logoContain, logoFor, type AccountStatus } from "@/lib/sites";
 import PlatformGrid from "./PlatformGrid";
 import ExportCsv from "./ExportCsv";
 import AccountsSheet from "./AccountsSheet";
-import { fetchJson, peekCache, setCache } from "@/lib/vaultCache";
+import { dropCache, fetchJson, peekCache, setCache } from "@/lib/vaultCache";
 
 export type SiteRow = {
   id: string;
@@ -19,6 +19,7 @@ export type SiteRow = {
   used: number;
   banned: number;
   inactive: number;
+  kyc?: number;
 };
 
 export type AccountRow = {
@@ -49,6 +50,7 @@ export default function AccountsManager() {
   const [flash, setFlash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const kycRef = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(() => sites.find((s) => s.slug === selectedSlug) ?? null, [sites, selectedSlug]);
   const siteId = selected?.id ?? null;
@@ -168,6 +170,59 @@ export default function AccountsManager() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
+  async function importKyc(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const text = await file.text();
+      const res = await fetch("/api/accounts/kyc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = (await res.json()) as { flagged?: number; error?: string };
+      if (!res.ok) {
+        notify(data.error || "KYC import failed");
+        return;
+      }
+      for (const site of sites) {
+        if (isTicketmasterSlug(site.slug)) dropCache(`accounts:${site.id}`);
+      }
+      await Promise.all([siteId ? loadAccounts(siteId, true) : Promise.resolve(), loadSites(true)]);
+      notify(`${data.flagged ?? 0} account${data.flagged === 1 ? "" : "s"} flagged KYC`);
+    } finally {
+      setBusy(false);
+      if (kycRef.current) kycRef.current.value = "";
+    }
+  }
+
+  const showKycImport = Boolean(
+    openGroup === "ticketmaster" || (selected && isTicketmasterSlug(selected.slug))
+  );
+
+  function kycButton() {
+    return (
+      <>
+        <input
+          ref={kycRef}
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          className="hidden"
+          onChange={(e) => void importKyc(e.target.files?.[0])}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => kycRef.current?.click()}
+          className="carbon-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-[13px] hover:text-[var(--carbon-error)]"
+        >
+          <ShieldAlert className="h-3.5 w-3.5" />
+          Import KYC
+        </button>
+      </>
+    );
+  }
+
   const persistAccounts = useCallback((id: string, next: AccountRow[]) => {
     setCache(`accounts:${id}`, { accounts: next });
     return next;
@@ -205,19 +260,26 @@ export default function AccountsManager() {
           <Loader2 className="h-6 w-6 animate-spin text-[var(--carbon-text-muted)]" />
         </div>
       ) : !selected ? (
-        <PlatformGrid
-          sites={sites}
-          groupId={openGroup}
-          onBack={goBack}
-          onPickPlatform={(platform) => {
-            if (platform.children) {
-              setOpenGroup(platform.id);
-              return;
-            }
-            if (platform.slug) pickSlug(platform.slug);
-          }}
-          onPickSlug={pickSlug}
-        />
+        <div>
+          {showKycImport && (
+            <div className="mb-4 flex justify-end">
+              {kycButton()}
+            </div>
+          )}
+          <PlatformGrid
+            sites={sites}
+            groupId={openGroup}
+            onBack={goBack}
+            onPickPlatform={(platform) => {
+              if (platform.children) {
+                setOpenGroup(platform.id);
+                return;
+              }
+              if (platform.slug) pickSlug(platform.slug);
+            }}
+            onPickSlug={pickSlug}
+          />
+        </div>
       ) : (
         <section>
               <button
@@ -255,6 +317,7 @@ export default function AccountsManager() {
                     {selected.used ? ` · ${selected.used} used` : ""}
                     {selected.banned ? ` · ${selected.banned} banned` : ""}
                     {selected.inactive ? ` · ${selected.inactive} inactive` : ""}
+                    {selected.kyc ? ` · ${selected.kyc} kyc` : ""}
                     {` · ${selected.total} total`}
                   </p>
                   </div>
@@ -284,6 +347,7 @@ export default function AccountsManager() {
                     <FileUp className="h-3.5 w-3.5" />
                     Import CSV
                   </button>
+                  {showKycImport && kycButton()}
                   <ExportCsv accounts={accounts} siteName={selected.name} search={search} />
                 </div>
               </div>
@@ -306,8 +370,12 @@ export default function AccountsManager() {
                       onClick={() => setStatusFilter(s)}
                       className={`rounded-lg px-2.5 py-1.5 text-[11px] font-medium capitalize ${
                         statusFilter === s
-                          ? "bg-[var(--carbon-primary)]/15 text-[var(--carbon-primary)]"
-                          : "border border-[var(--carbon-border)] bg-[var(--carbon-bg-elevated)] text-[var(--carbon-text-muted)] hover:text-[var(--carbon-text)]"
+                          ? s === "kyc"
+                            ? "bg-[var(--carbon-error)]/20 text-[var(--carbon-error)]"
+                            : "bg-[var(--carbon-primary)]/15 text-[var(--carbon-primary)]"
+                          : s === "kyc"
+                            ? "border border-[var(--carbon-error)]/40 bg-[var(--carbon-bg-elevated)] text-[var(--carbon-error)] hover:text-[#fca5a5]"
+                            : "border border-[var(--carbon-border)] bg-[var(--carbon-bg-elevated)] text-[var(--carbon-text-muted)] hover:text-[var(--carbon-text)]"
                       }`}
                     >
                       {s}

@@ -46,9 +46,121 @@ type Pos = { r: number; c: number };
 
 type ColorChange = { key: string; from?: SheetColorId; to?: SheetColorId };
 type EditChange = { id: string; data: Partial<AccountRow>; revert: Partial<AccountRow> };
-type Hist = { colors?: ColorChange[]; edit?: EditChange };
+type Hist = { colors?: ColorChange[]; edit?: EditChange; edits?: EditChange[] };
 
 const HIST_MAX = 100;
+const STATUSES = new Set<string>(ACCOUNT_STATUSES);
+
+function tsvEscape(value: string) {
+  if (/[\t\n\r"]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+function parseTsvLine(line: string) {
+  const cells: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (ch === '"') {
+        quoted = false;
+      } else {
+        cur += ch;
+      }
+      continue;
+    }
+    if (ch === '"') quoted = true;
+    else if (ch === "\t") {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
+
+function parseClipboard(text: string) {
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = normalized.split("\n");
+  if (lines.length && lines[lines.length - 1] === "") lines.pop();
+  if (lines.length === 0) return [] as string[][];
+  const hasTab = lines.some((l) => l.includes("\t"));
+  if (hasTab) return lines.map(parseTsvLine);
+  return lines.map((line) => {
+    if (!line.includes(",") || !line.includes('"')) return [line];
+    const cells: string[] = [];
+    let cur = "";
+    let quoted = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quoted) {
+        if (ch === '"' && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else if (ch === '"') quoted = false;
+        else cur += ch;
+        continue;
+      }
+      if (ch === '"') quoted = true;
+      else if (ch === ",") {
+        cells.push(cur);
+        cur = "";
+      } else cur += ch;
+    }
+    cells.push(cur);
+    return cells.length > 1 ? cells : [line];
+  });
+}
+
+function patchFromCol(
+  row: AccountRow,
+  col: SheetColId,
+  raw: string
+): EditChange | null {
+  const value = raw.trim();
+  if (col === "email") {
+    if (!value || value === row.login) return null;
+    return { id: row.id, data: { login: value }, revert: { login: row.login } };
+  }
+  if (col === "status") {
+    const status = value.toLowerCase();
+    if (!STATUSES.has(status) || status === row.status) return null;
+    return {
+      id: row.id,
+      data: { status: status as AccountStatus },
+      revert: { status: row.status },
+    };
+  }
+  const next = value || null;
+  if (col === "password") {
+    if (next === (row.password ?? null)) return null;
+    return { id: row.id, data: { password: next }, revert: { password: row.password } };
+  }
+  if (col === "phone") {
+    if (next === (row.phone ?? null)) return null;
+    return { id: row.id, data: { phone: next }, revert: { phone: row.phone } };
+  }
+  if (col === "first_name") {
+    if (next === (row.firstName ?? null)) return null;
+    return { id: row.id, data: { firstName: next }, revert: { firstName: row.firstName } };
+  }
+  if (col === "last_name") {
+    if (next === (row.lastName ?? null)) return null;
+    return { id: row.id, data: { lastName: next }, revert: { lastName: row.lastName } };
+  }
+  if (col === "birth_date") {
+    if (next === (row.birthDate ?? null)) return null;
+    return { id: row.id, data: { birthDate: next }, revert: { birthDate: row.birthDate } };
+  }
+  if (next === (row.notes ?? null)) return null;
+  return { id: row.id, data: { notes: next }, revert: { notes: row.notes } };
+}
 
 function valueOf(a: AccountRow, col: SheetColId) {
   switch (col) {
@@ -136,6 +248,10 @@ function AccountsSheet({
   const colorsRef = useRef<Record<string, SheetColorId>>({});
   const undoStack = useRef<Hist[]>([]);
   const redoStack = useRef<Hist[]>([]);
+  const selRef = useRef<{ a: Pos; b: Pos } | null>(null);
+  const editingRef = useRef<{ r: number; c: number } | null>(null);
+  const rowsRef = useRef(rows);
+  const colsRef = useRef<(typeof SHEET_COLUMNS)[number][]>([]);
 
   const [visible, setVisible] = useState<SheetColId[]>(() => readJson(colsKey, DEFAULT_COLS));
   const [colors, setColors] = useState<Record<string, SheetColorId>>(() => readJson(colorsKey, {}));
@@ -160,6 +276,10 @@ function AccountsSheet({
   colsLen.current = cols.length;
   colWRef.current = colW;
   colorsRef.current = colors;
+  selRef.current = sel;
+  editingRef.current = editing;
+  rowsRef.current = rows;
+  colsRef.current = cols;
   const canUndo = histTick >= 0 && undoStack.current.length > 0;
   const canRedo = histTick >= 0 && redoStack.current.length > 0;
 
@@ -213,6 +333,7 @@ function AccountsSheet({
     if (!entry) return;
     if (entry.colors) applyColorChanges(entry.colors, "from");
     if (entry.edit) onPatch(entry.edit.id, entry.edit.revert);
+    for (const change of entry.edits ?? []) onPatch(change.id, change.revert);
     redoStack.current.push(entry);
     setHistTick((n) => n + 1);
   }
@@ -222,6 +343,7 @@ function AccountsSheet({
     if (!entry) return;
     if (entry.colors) applyColorChanges(entry.colors, "to");
     if (entry.edit) onPatch(entry.edit.id, entry.edit.data);
+    for (const change of entry.edits ?? []) onPatch(change.id, change.data);
     undoStack.current.push(entry);
     setHistTick((n) => n + 1);
   }
@@ -355,6 +477,7 @@ function AccountsSheet({
     }
     dragging.current = true;
     dragOrigin.current = dragRows.current ? { r: origin.r, c: 0 } : origin;
+    scroller.current?.focus({ preventScroll: true });
     window.addEventListener("pointermove", onWindowPointerMove);
     window.addEventListener("pointerup", stopDrag);
     if (autoRaf.current) cancelAnimationFrame(autoRaf.current);
@@ -427,7 +550,83 @@ function AccountsSheet({
     setFocus(null);
   }
 
+  function selectionTsv() {
+    const current = selRef.current;
+    if (!current) return "";
+    const area = bounds(current.a, current.b);
+    const list = rowsRef.current;
+    const visibleCols = colsRef.current;
+    const lines: string[] = [];
+    for (let r = area.r0; r <= area.r1; r++) {
+      const row = list[r];
+      if (!row) continue;
+      const cells: string[] = [];
+      for (let c = area.c0; c <= area.c1; c++) {
+        const col = visibleCols[c];
+        if (col) cells.push(tsvEscape(valueOf(row, col.id)));
+      }
+      lines.push(cells.join("\t"));
+    }
+    return lines.join("\n");
+  }
+
+  function applyPaste(text: string) {
+    if (editingRef.current) return;
+    const current = selRef.current;
+    if (!current) return;
+    const area = bounds(current.a, current.b);
+    const grid = parseClipboard(text);
+    if (!grid.length) return;
+    const list = rowsRef.current;
+    const visibleCols = colsRef.current;
+    const single = grid.length === 1 && grid[0].length === 1;
+    const edits: EditChange[] = [];
+    const merged = new Map<string, EditChange>();
+
+    const write = (r: number, c: number, raw: string) => {
+      const row = list[r];
+      const col = visibleCols[c];
+      if (!row || !col) return;
+      const change = patchFromCol(row, col.id, raw);
+      if (!change) return;
+      const prev = merged.get(row.id);
+      if (prev) {
+        prev.data = { ...prev.data, ...change.data };
+        prev.revert = { ...change.revert, ...prev.revert };
+      } else {
+        merged.set(row.id, { ...change });
+      }
+    };
+
+    if (single) {
+      const raw = grid[0][0] ?? "";
+      for (let r = area.r0; r <= area.r1; r++) {
+        for (let c = area.c0; c <= area.c1; c++) write(r, c, raw);
+      }
+    } else {
+      for (let i = 0; i < grid.length; i++) {
+        const r = area.r0 + i;
+        if (r >= list.length) break;
+        for (let j = 0; j < grid[i].length; j++) {
+          const c = area.c0 + j;
+          if (c >= visibleCols.length) break;
+          write(r, c, grid[i][j] ?? "");
+        }
+      }
+    }
+
+    for (const change of merged.values()) {
+      edits.push(change);
+      onPatch(change.id, change.data);
+    }
+    if (edits.length) pushHist({ edits });
+  }
+
   useEffect(() => {
+    function inField(el: EventTarget | null) {
+      return (el as HTMLElement | null)?.closest?.("input,textarea,select");
+    }
+
     function onKey(ev: KeyboardEvent) {
       if (ev.key === "Escape") {
         setEditing(null);
@@ -435,36 +634,58 @@ function AccountsSheet({
         setFocus(null);
         return;
       }
-      if ((ev.metaKey || ev.ctrlKey) && (ev.key === "z" || ev.key === "y")) {
+      const cmd = ev.metaKey || ev.ctrlKey;
+      if (cmd && (ev.code === "KeyZ" || ev.code === "KeyY")) {
         ev.preventDefault();
-        if (ev.key === "y" || ev.shiftKey) redo();
+        if (ev.code === "KeyY" || ev.shiftKey) redo();
         else undo();
         return;
       }
-      if ((ev.metaKey || ev.ctrlKey) && ev.key === "a" && !editing && rows.length) {
+      if (cmd && ev.code === "KeyA" && !editingRef.current && rowsRef.current.length) {
         ev.preventDefault();
-        applyRange({ r: 0, c: 0 }, { r: rows.length - 1, c: cols.length - 1 });
+        applyRange({ r: 0, c: 0 }, { r: rowsRef.current.length - 1, c: colsRef.current.length - 1 });
         return;
       }
-      if ((ev.metaKey || ev.ctrlKey) && ev.key === "c" && box && !editing) {
+      if (cmd && ev.code === "KeyC" && selRef.current && !editingRef.current && !inField(ev.target)) {
         ev.preventDefault();
-        const lines: string[] = [];
-        for (let r = box.r0; r <= box.r1; r++) {
-          const row = rows[r];
-          if (!row) continue;
-          const cells: string[] = [];
-          for (let c = box.c0; c <= box.c1; c++) {
-            const col = cols[c];
-            if (col) cells.push(valueOf(row, col.id));
-          }
-          lines.push(cells.join("\t"));
-        }
-        void navigator.clipboard.writeText(lines.join("\n"));
+        const tsv = selectionTsv();
+        if (tsv) void navigator.clipboard.writeText(tsv).catch(() => undefined);
+        return;
+      }
+      if (cmd && ev.code === "KeyV" && selRef.current && !editingRef.current && !inField(ev.target)) {
+        ev.preventDefault();
+        void navigator.clipboard
+          .readText()
+          .then(applyPaste)
+          .catch(() => undefined);
       }
     }
+
+    function onCopy(ev: ClipboardEvent) {
+      if (editingRef.current || !selRef.current || inField(ev.target)) return;
+      const tsv = selectionTsv();
+      if (!tsv) return;
+      ev.preventDefault();
+      ev.clipboardData?.setData("text/plain", tsv);
+    }
+
+    function onPaste(ev: ClipboardEvent) {
+      if (editingRef.current || !selRef.current || inField(ev.target)) return;
+      const text = ev.clipboardData?.getData("text/plain");
+      if (text == null) return;
+      ev.preventDefault();
+      applyPaste(text);
+    }
+
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [box, editing, rows, cols, onPatch]);
+    document.addEventListener("copy", onCopy);
+    document.addEventListener("paste", onPaste);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("copy", onCopy);
+      document.removeEventListener("paste", onPaste);
+    };
+  }, [onPatch]);
 
   if (rows.length === 0) {
     return (
@@ -571,7 +792,8 @@ function AccountsSheet({
 
       <div
         ref={scroller}
-        className="max-h-[min(70vh,720px)] overflow-auto"
+        tabIndex={0}
+        className="max-h-[min(70vh,720px)] overflow-auto outline-none"
         onScroll={(e) => {
           const top = e.currentTarget.scrollTop;
           if (raf.current) return;
@@ -626,7 +848,11 @@ function AccountsSheet({
                       const isEdit = editing?.r === r && editing.c === c;
                       const isFocus = focus?.r === r && focus?.c === c;
                       const raw = valueOf(row, col.id);
-                      const tint = fill ? FILL[fill] : null;
+                      const tint = fill
+                        ? FILL[fill]
+                        : col.id === "status" && row.status === "kyc"
+                          ? FILL.red
+                          : null;
                       return (
                         <td
                           key={col.id}

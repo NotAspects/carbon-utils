@@ -60,12 +60,15 @@ const SITES = {
   us: "cmthsi63o0005uxz52i3gmzlb", // ticketmaster-us
 };
 
-function routeCountry(value, channelName) {
+function routeCountry(value, title, channelName) {
   const v = (value ?? "").trim().toLowerCase();
   if (/^(fr|france)$/.test(v)) return "fr";
   if (/^(us|usa|united states)$/.test(v)) return "us";
   if (/^(uk|united kingdom|gb)$/.test(v)) return "uk";
   if (/^(de|germany|deutschland)$/.test(v)) return "de";
+  const map = { FR: "fr", US: "us", UK: "uk", DE: "de" };
+  const m = (title ?? "").toUpperCase().match(/TICKETMASTER[\s-]+(FR|US|UK|DE|MX|CA|AU)\b/);
+  if (m && map[m[1]]) return map[m[1]];
   const ch = (channelName ?? "").toLowerCase();
   if (/\bfr\b|france/.test(ch)) return "fr";
   if (/\bus\b|\busa\b/.test(ch)) return "us";
@@ -75,6 +78,16 @@ function routeCountry(value, channelName) {
 }
 
 const clean = (s) => (s ?? "").trim().replace(/^`+|`+$/g, "").replace(/^\|\||\|\|$/g, "");
+
+// fallback : préfixe international du téléphone du webhook (+33 FR, +44 UK, +1 US, +49 DE)
+function phoneCountry(phone) {
+  const p = (phone ?? "").replace(/[\s().-]/g, "");
+  if (/^\+33/.test(p)) return "fr";
+  if (/^\+44/.test(p)) return "uk";
+  if (/^\+1\d/.test(p)) return "us";
+  if (/^\+49/.test(p)) return "de";
+  return null;
+}
 
 function accountFromTmEmbed(embed, channelName) {
   const fields = embed.fields ?? [];
@@ -91,7 +104,7 @@ function accountFromTmEmbed(embed, channelName) {
     phone: get(/phone/i) || null,
     firstName: get(/first\s*name/i) || null,
     lastName: get(/last\s*name/i) || null,
-    country: routeCountry(get(/^country/i), channelName),
+    country: routeCountry(get(/^country/i), embed.title, channelName) ?? phoneCountry(get(/phone/i)),
     title: embed.title ?? "",
   };
 }

@@ -83,8 +83,61 @@ export function logoContain(key: string) {
   return key === "axs" || key === "olympics-la28";
 }
 
-export const ACCOUNT_STATUSES = ["active", "used", "banned", "inactive"] as const;
+export const ACCOUNT_STATUSES = ["active", "used", "banned", "inactive", "kyc"] as const;
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
+export function isTicketmasterSlug(slug: string) {
+  return slug === "ticketmaster" || slug.startsWith("ticketmaster-");
+}
+
+const EMAIL_RE = /[^\s,;"<>]+@[^\s,;"<>]+/g;
+
+function normPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 8 ? digits : "";
+}
+
+/** Emails / logins / phones from a KYC CSV (any column). */
+export function parseKycKeys(text: string): { logins: string[]; phones: string[] } {
+  const logins = new Set<string>();
+  const phones = new Set<string>();
+  const lines = text
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const emails = line.match(EMAIL_RE) ?? [];
+    for (const email of emails) logins.add(email.toLowerCase());
+
+    const delim = line.includes(";") && (!line.includes(",") || line.indexOf(";") < line.indexOf(",")) ? ";" : ",";
+    const cells = splitCsvLine(line, delim).map((c) => c.trim());
+    const first = (cells[0] ?? "").toLowerCase();
+    if (HEADER_CELLS.has(first) || first === "phone" || first === "tel" || first === "mobile") continue;
+
+    if (!emails.length && first && first.includes("@")) logins.add(first);
+    else if (!emails.length && first && first !== "kyc") logins.add(first);
+
+    for (const cell of cells) {
+      if (cell.includes("@") || !/^[+\d][\d\s().-]{7,}$/.test(cell)) continue;
+      const phone = normPhone(cell);
+      if (phone) phones.add(phone);
+    }
+  }
+
+  return { logins: [...logins], phones: [...phones] };
+}
+
+export function accountMatchesKyc(
+  login: string,
+  phone: string | null,
+  keys: { logins: Set<string>; phones: Set<string> }
+) {
+  if (keys.logins.has(login.toLowerCase())) return true;
+  const phoneKey = phone ? normPhone(phone) : "";
+  return Boolean(phoneKey && keys.phones.has(phoneKey));
+}
 
 export function slugify(name: string) {
   return name
