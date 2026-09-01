@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Check, Copy, Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Check, Copy, Eye, EyeOff, Loader2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { API_PROVIDERS, KEY_GROUPS, type ApiGroup } from "@/lib/apiProviders";
 import { fetchJson, peekCache } from "@/lib/vaultCache";
@@ -34,7 +34,12 @@ function money(amount: number, currency: string | null) {
 
 export default function ApiKeysManager() {
   const [keys, setKeys] = useState<KeyRow[]>(() => peekCache<{ keys: KeyRow[] }>("keys")?.keys ?? []);
-  const [balances, setBalances] = useState<Record<string, BalanceRow>>({});
+  const [balances, setBalances] = useState<Record<string, BalanceRow>>(() => {
+    const rows = peekCache<{ balances: BalanceRow[] }>("balances")?.balances ?? [];
+    const map: Record<string, BalanceRow> = {};
+    for (const b of rows) map[b.slug] = b;
+    return map;
+  });
   const [loading, setLoading] = useState(() => !peekCache("keys"));
   const [loadingBal, setLoadingBal] = useState(false);
   const [openGroup, setOpenGroup] = useState<ApiGroup | null>(null);
@@ -49,25 +54,42 @@ export default function ApiKeysManager() {
   const def = selected ? API_PROVIDERS.find((p) => p.slug === selected.slug) : null;
   const bal = selected ? balances[selected.slug] : null;
 
-  const loadKeys = useCallback(async () => {
-    const data = await fetchJson<{ keys: KeyRow[] }>("keys", "/api/keys");
+  const applyBalances = useCallback((rows: BalanceRow[]) => {
+    const map: Record<string, BalanceRow> = {};
+    for (const b of rows) map[b.slug] = b;
+    setBalances(map);
+  }, []);
+
+  const loadKeys = useCallback(async (force = false) => {
+    const cached = peekCache<{ keys: KeyRow[] }>("keys");
+    if (cached?.keys && !force) {
+      setKeys(cached.keys);
+      setLoading(false);
+      return;
+    }
+    const data = await fetchJson<{ keys: KeyRow[] }>("keys", "/api/keys", force);
     if (data?.keys) setKeys(data.keys);
     setLoading(false);
   }, []);
 
   const loadBalances = useCallback(async (force = false) => {
+    const cached = peekCache<{ balances: BalanceRow[] }>("balances");
+    if (cached?.balances && !force) {
+      applyBalances(cached.balances);
+      return;
+    }
     setLoadingBal(true);
     try {
-      const res = await fetch(force ? "/api/keys/balances?force=1" : "/api/keys/balances");
-      if (!res.ok) return;
-      const data = (await res.json()) as { balances: BalanceRow[] };
-      const map: Record<string, BalanceRow> = {};
-      for (const b of data.balances) map[b.slug] = b;
-      setBalances(map);
+      const data = await fetchJson<{ balances: BalanceRow[] }>(
+        "balances",
+        force ? "/api/keys/balances?force=1" : "/api/keys/balances",
+        force
+      );
+      if (data?.balances) applyBalances(data.balances);
     } finally {
       setLoadingBal(false);
     }
-  }, []);
+  }, [applyBalances]);
 
   useEffect(() => {
     loadKeys();
@@ -116,8 +138,8 @@ export default function ApiKeysManager() {
         return;
       }
       setDraft("");
-      await loadKeys();
-      loadBalances();
+      await loadKeys(true);
+      loadBalances(true);
       notify("API key saved");
     } finally {
       setSaving(false);
@@ -126,19 +148,8 @@ export default function ApiKeysManager() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-6">
         <PageHeader page="keys" />
-        {selected && (
-          <button
-            type="button"
-            onClick={() => loadBalances(true)}
-            disabled={loadingBal}
-            className="carbon-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-[13px]"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loadingBal ? "animate-spin" : ""}`} />
-            Refresh balance
-          </button>
-        )}
       </div>
 
       {loading ? (

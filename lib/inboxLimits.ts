@@ -1,5 +1,6 @@
 export const INBOX_PAGE_SIZE = 80;
 export const INBOX_PAGE_MAX = 200;
+export const INBOX_POLL_MS = 45_000;
 
 export async function mapPool<T, R>(
   items: T[],

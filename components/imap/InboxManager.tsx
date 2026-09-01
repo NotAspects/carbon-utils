@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Inbox, Loader2, RefreshCw, Search, X } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
-import { INBOX_PAGE_SIZE, mapPool } from "@/lib/inboxLimits";
-import { fetchJson, isFresh, peekCache, setCache } from "@/lib/vaultCache";
+import { INBOX_PAGE_SIZE, INBOX_POLL_MS, mapPool } from "@/lib/inboxLimits";
+import { fetchJson, peekCache, setCache } from "@/lib/vaultCache";
 
 type InboxRow = {
   id: string;
@@ -144,14 +144,13 @@ export default function InboxManager() {
 
   const load = useCallback(async (force = false) => {
     const seed = collectInbox();
-    if (seed.items.length && !force) {
+    if (seed.items.length || seed.mailboxes.length) {
       setItems(seed.items);
       setMailboxes(seed.mailboxes);
-      setRefreshing(true);
-    } else if (!seed.items.length) {
-      setLoading(true);
+      setLoading(false);
+      if (force) setRefreshing(true);
     } else {
-      setRefreshing(true);
+      setLoading(true);
     }
 
     try {
@@ -227,6 +226,15 @@ export default function InboxManager() {
 
   useEffect(() => {
     load();
+    const tick = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    const id = window.setInterval(tick, INBOX_POLL_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -292,7 +300,7 @@ export default function InboxManager() {
       setBody(cachedBody);
       setLoadingBody(false);
       setItems((prev) => prev.map((m) => (m.id === row.id ? { ...m, unseen: false } : m)));
-      if (isFresh(bodyKey, 180_000)) return;
+      return;
     } else {
       setLoadingBody(true);
       setBody(null);

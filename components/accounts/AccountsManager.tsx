@@ -54,6 +54,12 @@ export default function AccountsManager() {
   const siteId = selected?.id ?? null;
 
   const loadSites = useCallback(async (force = false) => {
+    const cached = peekCache<{ sites: SiteRow[] }>("sites");
+    if (cached?.sites && !force) {
+      setSites(cached.sites);
+      setLoadingSites(false);
+      return;
+    }
     const data = await fetchJson<{ sites: SiteRow[] }>("sites", "/api/sites", force);
     if (data?.sites) setSites(data.sites);
     setLoadingSites(false);
@@ -65,9 +71,9 @@ export default function AccountsManager() {
     if (cached?.accounts && !force) {
       setAccounts(cached.accounts);
       setLoadingAccounts(false);
-    } else {
-      setLoadingAccounts(true);
+      return;
     }
+    setLoadingAccounts(true);
     try {
       const data = await fetchJson<{ accounts: AccountRow[] }>(
         key,

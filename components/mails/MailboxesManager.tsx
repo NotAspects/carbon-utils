@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, Copy, Download, Eye, EyeOff, Loader2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { MAIL_GROUPS } from "@/lib/mailboxes";
-import { fetchJson, peekCache } from "@/lib/vaultCache";
+import { dropCachePrefix, fetchJson, peekCache } from "@/lib/vaultCache";
 import MailGrid from "./MailGrid";
 
 export type MailboxRow = {
@@ -56,6 +56,12 @@ export default function MailboxesManager() {
     .filter(Boolean).length;
 
   const loadMailboxes = useCallback(async (force = false) => {
+    const cached = peekCache<{ mailboxes: MailboxRow[] }>("mailboxes");
+    if (cached?.mailboxes && !force) {
+      setMailboxes(cached.mailboxes);
+      setLoadingBoxes(false);
+      return;
+    }
     const data = await fetchJson<{ mailboxes: MailboxRow[] }>("mailboxes", "/api/mailboxes", force);
     if (data?.mailboxes) setMailboxes(data.mailboxes);
     setLoadingBoxes(false);
@@ -69,9 +75,9 @@ export default function MailboxesManager() {
       setMailText(text);
       setSavedText(text);
       setLoadingMails(false);
-    } else {
-      setLoadingMails(true);
+      return;
     }
+    setLoadingMails(true);
     try {
       const data = await fetchJson<{ accounts: MailAccountRow[] }>(
         key,
@@ -143,7 +149,8 @@ export default function MailboxesManager() {
         return;
       }
       setImapPass("");
-      await loadMailboxes();
+      dropCachePrefix("inbox");
+      await loadMailboxes(true);
       notify("IMAP password saved");
     } finally {
       setSavingImap(false);

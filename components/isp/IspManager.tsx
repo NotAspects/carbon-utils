@@ -20,6 +20,14 @@ export default function IspManager() {
     .filter(Boolean).length;
 
   const load = useCallback(async () => {
+    const cached = peekCache<{ text?: string }>("proxies");
+    if (cached) {
+      const next = cached.text ?? "";
+      setText(next);
+      setSaved(next);
+      setLoading(false);
+      return;
+    }
     const data = await fetchJson<{ text?: string }>("proxies", "/api/proxies");
     const next = data?.text ?? "";
     setText(next);

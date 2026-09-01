@@ -81,11 +81,12 @@ const HEADER_CELLS = /^(login|user|username|email|mail|compte|account|password|p
 
 function extractFromText(text, notes, out, seen) {
   for (const rawLine of (text ?? "").replace(/^\uFEFF/, "").split(/\r?\n/)) {
-    const line = rawLine.trim();
+    const line = rawLine.trim().replace(/^`+|`+$/g, "");
     if (!line || line.includes("://") || line.startsWith("#")) continue;
     const pair = splitAccountLine(line);
     if (!pair) continue;
     if (HEADER_CELLS.test(pair.login) || HEADER_CELLS.test(pair.password)) continue; // entête CSV
+    if (!pair.login.includes("@")) continue; // le texte libre ne fournit que des logins email
     if (/^\d{1,2}$/.test(pair.login) && /^\d{1,2}$/.test(pair.password)) continue; // heures type 12:30
     const key = pair.login.toLowerCase();
     if (seen.has(key)) continue;
