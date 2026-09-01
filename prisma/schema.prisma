@@ -35,3 +35,50 @@ model Account {
   @@index([status])
   @@index([login])
 }
+
+model Mailbox {
+  id        String        @id @default(cuid())
+  slug      String        @unique
+  name      String
+  email     String
+  host      String        @default("imap.gmail.com")
+  port      Int           @default(993)
+  password  String?
+  kind      String        @default("forward")
+  domain    String?
+  notes     String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  accounts  MailAccount[]
+
+  @@index([kind])
+  @@index([email])
+}
+
+model MailAccount {
+  id        String   @id @default(cuid())
+  mailboxId String
+  mailbox   Mailbox  @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  login     String
+  password  String?
+  notes     String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mailboxId])
+  @@index([status])
+  @@index([login])
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  group     String
+  slug      String   @unique
+  name      String
+  apiKey    String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([group])
+}

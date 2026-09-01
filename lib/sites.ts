@@ -1,7 +1,87 @@
-export const DEFAULT_SITES = [
-  { slug: "ticketmaster-fr", name: "Ticketmaster FR" },
-  { slug: "fnac-spectacle", name: "Fnac Spectacle" },
-] as const;
+export type CatalogChild = {
+  slug: string;
+  name: string;
+  short: string;
+};
+
+export type CatalogPlatform = {
+  id: string;
+  name: string;
+  slug?: string;
+  hint?: string;
+  children?: CatalogChild[];
+};
+
+export const PLATFORM_CATALOG: CatalogPlatform[] = [
+  {
+    id: "ticketmaster",
+    name: "Ticketmaster Global",
+    hint: "Regions",
+    children: [
+      { slug: "ticketmaster-fr", name: "Ticketmaster FR", short: "FR" },
+      { slug: "ticketmaster-de", name: "Ticketmaster DE", short: "DE" },
+      { slug: "ticketmaster-uk", name: "Ticketmaster UK", short: "UK" },
+      { slug: "ticketmaster-us", name: "Ticketmaster US", short: "US" },
+      { slug: "ticketmaster-sg", name: "Ticketmaster SG", short: "SG" },
+    ],
+  },
+  { id: "axs", name: "AXS", slug: "axs" },
+  {
+    id: "eventim",
+    name: "Eventim",
+    hint: "Affiliates",
+    children: [
+      { slug: "ticketone", name: "TicketOne", short: "TicketOne" },
+      { slug: "fnac-spectacle", name: "Fnac Spectacle", short: "Fnac Spectacle" },
+      { slug: "oeticket", name: "Oeticket", short: "Oeticket" },
+      { slug: "ticketcorner", name: "TicketCorner", short: "TicketCorner" },
+      { slug: "entradas", name: "Entradas", short: "Entradas" },
+    ],
+  },
+  { id: "seetickets", name: "SeeTickets", slug: "seetickets" },
+  { id: "gigs-and-tours", name: "Gigs And Tours", slug: "gigs-and-tours" },
+  { id: "tomorrowland", name: "TML", slug: "tomorrowland" },
+  { id: "psg", name: "PSG", slug: "psg" },
+  { id: "olympics-la28", name: "Olympics (LA28)", slug: "olympics-la28" },
+  { id: "roland-garros", name: "Roland Garros", slug: "roland-garros" },
+  { id: "fifa", name: "FIFA", slug: "fifa" },
+  { id: "dice", name: "Dice", slug: "dice" },
+];
+
+export const DEFAULT_SITES = PLATFORM_CATALOG.flatMap((p) =>
+  p.children ?? (p.slug ? [{ slug: p.slug, name: p.name }] : [])
+);
+
+const EVENTIM_SLUGS = new Set([
+  "eventim",
+  "ticketone",
+  "fnac-spectacle",
+  "oeticket",
+  "ticketcorner",
+  "entradas",
+]);
+
+export function logoFor(key: string): string | null {
+  const path = (() => {
+    if (key.startsWith("ticketmaster")) return "/logos/ticketmaster.png";
+    if (EVENTIM_SLUGS.has(key)) return "/logos/eventim.png";
+    if (key === "psg") return "/logos/psg.png";
+    if (key === "seetickets") return "/logos/seetickets.png";
+    if (key === "gigs-and-tours") return "/logos/gigs-and-tours.png";
+    if (key === "olympics-la28") return "/logos/la28.jpeg";
+    if (key === "axs") return "/logos/axs.png";
+    if (key === "tomorrowland") return "/logos/tomorrowland.png";
+    if (key === "roland-garros") return "/logos/roland-garros.png";
+    if (key === "fifa") return "/logos/fifa.jpeg";
+    return null;
+  })();
+  return path ? `${path}?v=4` : null;
+}
+
+/** Wordmarks that need the full image on white — do not crop. */
+export function logoContain(key: string) {
+  return key === "axs" || key === "olympics-la28";
+}
 
 export const ACCOUNT_STATUSES = ["active", "used", "banned", "inactive"] as const;
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
@@ -32,16 +112,44 @@ function emptyToNull(v: string | undefined | null) {
   return t ? t : null;
 }
 
-/** One line = login:password  — extra colon-separated fields become notes. */
+const HEADER_CELLS = new Set([
+  "mail",
+  "email",
+  "e-mail",
+  "login",
+  "user",
+  "username",
+]);
+
+function isHeaderRow(line: string) {
+  const delim = line.includes(";") && !line.includes(",") ? ";" : ",";
+  const first = (splitCsvLine(line, delim)[0] ?? "").trim().toLowerCase();
+  return HEADER_CELLS.has(first);
+}
+
+function looksLikeCsv(line: string) {
+  if (/^[^\s,;]+@[^\s,;]+[,;]/.test(line)) return true;
+  if (line.includes(";") && line.split(";").length >= 2 && !line.includes(":")) return true;
+  if (line.includes(",") && splitCsvLine(line, ",").length >= 2) {
+    return !line.includes(":") || line.indexOf(",") < line.indexOf(":");
+  }
+  return false;
+}
+
+/** One line = email,password (CSV) or login:password. */
 export function parseAccountLines(text: string): ParsedAccount[] {
   return text
+    .replace(/^\uFEFF/, "")
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean)
-    .filter((l) => !l.toLowerCase().startsWith("mail,") && !l.toLowerCase().startsWith("email,"))
+    .filter((l) => !isHeaderRow(l))
     .map((line) => {
-      if (line.includes(",") && line.split(",").length >= 2 && !line.includes(":")) {
-        return parseCsvRow(line);
+      if (looksLikeCsv(line)) {
+        const delim = line.includes(";") && (!line.includes(",") || line.indexOf(";") < line.indexOf(","))
+          ? ";"
+          : ",";
+        return parseCsvRow(line, delim);
       }
       const i = line.indexOf(":");
       if (i === -1) {
@@ -73,9 +181,9 @@ export function parseAccountLines(text: string): ParsedAccount[] {
     .filter((r) => r.login);
 }
 
-/** mail,password,phone_number,first_name,last_name,birth_date */
-export function parseCsvRow(line: string): ParsedAccount {
-  const cols = splitCsvLine(line);
+/** email,password,phone,first_name,last_name,birth_date */
+export function parseCsvRow(line: string, delim = ","): ParsedAccount {
+  const cols = splitCsvLine(line, delim);
   return {
     login: (cols[0] ?? "").trim(),
     password: emptyToNull(cols[1]),
@@ -87,7 +195,7 @@ export function parseCsvRow(line: string): ParsedAccount {
   };
 }
 
-function splitCsvLine(line: string): string[] {
+function splitCsvLine(line: string, delim = ","): string[] {
   const out: string[] = [];
   let cur = "";
   let inQuotes = false;
@@ -97,7 +205,7 @@ function splitCsvLine(line: string): string[] {
       inQuotes = !inQuotes;
       continue;
     }
-    if (c === "," && !inQuotes) {
+    if (c === delim && !inQuotes) {
       out.push(cur);
       cur = "";
       continue;

@@ -4,10 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { DEFAULT_SITES, slugify } from "@/lib/sites";
 
 async function ensureDefaults() {
-  const count = await prisma.site.count();
-  if (count > 0) return;
   await prisma.site.createMany({
     data: DEFAULT_SITES.map((s) => ({ slug: s.slug, name: s.name })),
+    skipDuplicates: true,
   });
 }
 

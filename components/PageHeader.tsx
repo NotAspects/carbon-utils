@@ -3,7 +3,15 @@
 const PAGES: Record<string, { title: string; subtitle: string }> = {
   accounts: {
     title: "Accounts",
-    subtitle: "Login accounts by platform — Ticketmaster, Fnac, and whatever you add next.",
+    subtitle: "Pick a site to view and import accounts.",
+  },
+  mails: {
+    title: "Mails",
+    subtitle: "Pick a forward to view IMAP details and the mail list.",
+  },
+  keys: {
+    title: "API keys",
+    subtitle: "Pick a provider to view the key and live balance.",
   },
 };
 

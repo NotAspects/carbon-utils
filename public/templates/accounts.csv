@@ -1,0 +1,3 @@
+email,password,phone,first_name,last_name,birth_date
+jane@example.com,Secret123,+33600000000,Jane,Doe,01/01/1995
+john@example.com,AnotherPass,,,,
