@@ -9,6 +9,10 @@ const PAGES: Record<string, { title: string; subtitle: string }> = {
     title: "Mails",
     subtitle: "Pick a forward to view IMAP details and the mail list.",
   },
+  isp: {
+    title: "ISP",
+    subtitle: "Paste and store your proxy batch.",
+  },
   keys: {
     title: "API keys",
     subtitle: "Pick a provider to view the key and live balance.",

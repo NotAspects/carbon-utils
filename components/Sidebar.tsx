@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
+import { Globe, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const COLLAPSE_KEY = "carbon-utils-sidebar-collapsed";
@@ -19,6 +19,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { name: "Accounts", href: "/accounts", icon: Users, group: "vault" },
   { name: "Mails", href: "/mails", icon: Mail, group: "vault" },
+  { name: "ISP", href: "/isp", icon: Globe, group: "vault" },
   { name: "API keys", href: "/keys", icon: KeyRound, group: "vault" },
 ];
 

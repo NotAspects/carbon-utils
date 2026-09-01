@@ -71,6 +71,12 @@ model MailAccount {
   @@index([login])
 }
 
+model ProxyList {
+  id        String   @id @default("isp")
+  text      String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
 model ApiKey {
   id        String   @id @default(cuid())
   group     String
