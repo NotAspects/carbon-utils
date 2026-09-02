@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowLeft, KeyRound, MessageSquare, ScanSearch } from "lucide-react";
+import { ArrowLeft, KeyRound, Layers, MessageSquare, ScanSearch } from "lucide-react";
 import { API_PROVIDERS, KEY_GROUPS, type ApiGroup } from "@/lib/apiProviders";
 
 type KeyRow = {
@@ -86,6 +86,12 @@ function balanceLabel(
   return money(bal.amount, bal.currency);
 }
 
+function groupIcon(id: ApiGroup, drilldown = false) {
+  if (id === "sms") return MessageSquare;
+  if (id === "aycd") return Layers;
+  return drilldown ? ScanSearch : KeyRound;
+}
+
 export default function KeyGrid({
   keys,
   balances,
@@ -125,7 +131,7 @@ export default function KeyGrid({
               subtitle={p.slug}
               value={balanceLabel(p.slug, bySlug, balances)}
               configured={Boolean(bySlug.get(p.slug)?.apiKey.trim())}
-              icon={group.id === "sms" ? MessageSquare : ScanSearch}
+              icon={groupIcon(group.id, true)}
               onClick={() => onPickSlug(p.slug)}
             />
           ))}
@@ -145,7 +151,7 @@ export default function KeyGrid({
             title={g.name}
             subtitle={`${saved}/${slugs.length} keys saved`}
             configured={saved > 0}
-            icon={g.id === "sms" ? MessageSquare : KeyRound}
+            icon={groupIcon(g.id)}
             onClick={() => onPickGroup(g.id)}
           />
         );

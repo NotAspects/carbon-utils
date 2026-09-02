@@ -9,7 +9,7 @@ import KeyGrid from "./KeyGrid";
 
 type KeyRow = {
   id: string;
-  group: "sms" | "solver" | string;
+  group: "sms" | "solver" | "aycd" | string;
   slug: string;
   name: string;
   apiKey: string;
