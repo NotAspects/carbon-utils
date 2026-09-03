@@ -3,10 +3,7 @@ import { requireAdmin, unauthorized } from "@/lib/auth";
 import { MAILBOX_CATALOG } from "@/lib/mailboxes";
 import { prisma } from "@/lib/prisma";
 
-let seeded = false;
-
 async function ensureDefaults() {
-  if (seeded) return;
   await prisma.mailbox.createMany({
     data: MAILBOX_CATALOG.map((m) => ({
       slug: m.slug,
@@ -19,7 +16,6 @@ async function ensureDefaults() {
     })),
     skipDuplicates: true,
   });
-  seeded = true;
 }
 
 export async function GET() {

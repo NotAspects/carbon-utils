@@ -69,19 +69,23 @@ export async function fetchJson<T>(key: string, url: string, force = false): Pro
 
 async function warmAll() {
   const [sites, mailboxes, , , boxesWrap] = await Promise.all([
-    fetchJson<{ sites: { id: string }[] }>("sites", "/api/sites"),
-    fetchJson<{ mailboxes: { id: string }[] }>("mailboxes", "/api/mailboxes"),
+    fetchJson<{ sites: { id: string; slug?: string }[] }>("sites", "/api/sites"),
+    fetchJson<{ mailboxes: { id: string; slug?: string; kind?: string }[] }>("mailboxes", "/api/mailboxes"),
     fetchJson("keys", "/api/keys"),
     fetchJson("proxies", "/api/proxies"),
     fetchJson<{ mailboxes?: { id: string }[] }>("inbox-boxes", "/api/inbox/boxes"),
   ]);
 
   await Promise.all([
-    mapPool(sites?.sites ?? [], 4, (site) =>
-      fetchJson(`accounts:${site.id}`, `/api/accounts?siteId=${encodeURIComponent(site.id)}`)
+    mapPool(
+      (sites?.sites ?? []).filter((site) => site.slug !== "outlook"),
+      4,
+      (site) => fetchJson(`accounts:${site.id}`, `/api/accounts?siteId=${encodeURIComponent(site.id)}`)
     ),
-    mapPool(mailboxes?.mailboxes ?? [], 4, (box) =>
-      fetchJson(`mail-accounts:${box.id}`, `/api/mail-accounts?mailboxId=${encodeURIComponent(box.id)}`)
+    mapPool(
+      (mailboxes?.mailboxes ?? []).filter((box) => box.slug !== "outlook" && box.kind !== "outlook"),
+      4,
+      (box) => fetchJson(`mail-accounts:${box.id}`, `/api/mail-accounts?mailboxId=${encodeURIComponent(box.id)}`)
     ),
     fetchJson("balances", "/api/keys/balances"),
   ]);

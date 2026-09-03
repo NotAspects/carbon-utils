@@ -21,8 +21,6 @@ export const API_PROVIDERS: ProviderDef[] = [
   { slug: "inhouse", name: "Inhouse", group: "solver", balance: false },
   { slug: "kagedcap", name: "KagedCap", group: "solver", balance: true },
   { slug: "dispurcaptcha", name: "DispurCaptcha", group: "solver", balance: false },
-  { slug: "aycd", name: "AYCD", group: "aycd", balance: false },
-  { slug: "aycd-autosolve", name: "AutoSolve", group: "aycd", balance: false },
 ];
 
 export const KEY_GROUPS: { id: ApiGroup; name: string; hint: string }[] = [

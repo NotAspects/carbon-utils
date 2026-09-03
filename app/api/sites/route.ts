@@ -3,15 +3,11 @@ import { requireAdmin, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_SITES, slugify } from "@/lib/sites";
 
-let seeded = false;
-
 async function ensureDefaults() {
-  if (seeded) return;
   await prisma.site.createMany({
     data: DEFAULT_SITES.map((s) => ({ slug: s.slug, name: s.name })),
     skipDuplicates: true,
   });
-  seeded = true;
 }
 
 export async function GET() {
@@ -38,7 +34,7 @@ export async function GET() {
 
   return NextResponse.json(
     {
-      sites: sites.map((site) => {
+      sites: sites.filter((site) => site.slug !== "outlook").map((site) => {
         const byStatus = bySite[site.id] ?? {};
         const active = byStatus.active ?? 0;
         const used = byStatus.used ?? 0;
@@ -80,6 +76,5 @@ export async function POST(req: NextRequest) {
   }
 
   const site = await prisma.site.create({ data: { name, slug } });
-  seeded = false;
   return NextResponse.json({ site });
 }

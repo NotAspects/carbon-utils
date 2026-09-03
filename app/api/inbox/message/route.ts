@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorized } from "@/lib/auth";
+import { AYCD_BOX_ID, readAycdMessage } from "@/lib/aycdInbox";
 import { readMessage } from "@/lib/imapInbox";
 import { loadImapBoxes } from "@/lib/inboxBoxes";
 
@@ -13,6 +14,12 @@ export async function GET(req: NextRequest) {
   const uid = Number(req.nextUrl.searchParams.get("uid"));
   if (!mailboxId || !uid) {
     return NextResponse.json({ error: "mailboxId and uid required" }, { status: 400 });
+  }
+
+  if (mailboxId === AYCD_BOX_ID) {
+    const message = readAycdMessage(uid);
+    if (!message) return NextResponse.json({ error: "message not found" }, { status: 404 });
+    return NextResponse.json({ message }, { headers: { "Cache-Control": "private, max-age=60" } });
   }
 
   const boxes = await loadImapBoxes(mailboxId);

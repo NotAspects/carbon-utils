@@ -154,6 +154,24 @@ export default function InboxManager() {
     }
 
     try {
+      const soloBox = new URLSearchParams(window.location.search).get("box");
+      if (soloBox) {
+        const data = await fetchJson<BoxPayload & { mailbox?: MailboxChip }>(
+          `inbox-box:${soloBox}`,
+          `/api/inbox?mailboxId=${encodeURIComponent(soloBox)}&limit=${INBOX_PAGE_SIZE}${force ? "&force=1" : ""}`,
+          force
+        );
+        const chip = data?.mailbox ?? { id: soloBox, name: "Outlook", email: "" };
+        const rows = data?.items ?? [];
+        setMailboxes([chip]);
+        setItems(rows);
+        setHasMoreByBox({ [chip.id]: Boolean(data?.hasMore) });
+        setErrors(data?.error ? [data.error] : []);
+        setWarning(data?.error || null);
+        setCache("inbox", { items: rows, mailboxes: [chip] });
+        return;
+      }
+
       const boxesP = fetchJson<{ mailboxes?: MailboxChip[] }>("inbox-boxes", "/api/inbox/boxes", force);
       let boxes = seed.mailboxes;
       if (!boxes.length) {
@@ -167,7 +185,7 @@ export default function InboxManager() {
 
       if (boxes.length === 0) {
         setItems([]);
-        setWarning("No IMAP passwords saved. Add them in Mails first.");
+        setWarning("No IMAP passwords saved. Add them in Mails, or add an Inbox AYCD key in Keys.");
         setErrors([]);
         setCache("inbox", { items: [], mailboxes: [] });
         return;
@@ -207,6 +225,10 @@ export default function InboxManager() {
       const first = await mapPool(boxes, 3, pull);
       setItems((prev) => applyPulls(first, prev));
       setLoading(false);
+      if (new URLSearchParams(window.location.search).get("source") === "aycd") {
+        const aycd = boxes.find((b) => b.id === "aycd" || b.email === "aycd");
+        if (aycd) setFilter(aycd.email.toLowerCase());
+      }
 
       const latest = (await boxesP)?.mailboxes;
       if (latest?.length) {

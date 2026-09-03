@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Check, Copy, Eye, EyeOff, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Copy, Eye, EyeOff, Loader2, Plus, Trash2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { API_PROVIDERS, KEY_GROUPS, type ApiGroup } from "@/lib/apiProviders";
 import { fetchJson, peekCache } from "@/lib/vaultCache";
@@ -47,7 +47,10 @@ export default function ApiKeysManager() {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState("");
+  const [aycdName, setAycdName] = useState("");
+  const [aycdKey, setAycdKey] = useState("");
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
   const selected = keys.find((k) => k.slug === selectedSlug) ?? null;
@@ -146,6 +149,70 @@ export default function ApiKeysManager() {
     }
   }
 
+  async function addAycdKey() {
+    if (!aycdName.trim() || !aycdKey.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group: "aycd", name: aycdName.trim(), apiKey: aycdKey.trim() }),
+      });
+      if (!res.ok) {
+        notify("Could not add key");
+        return;
+      }
+      setAycdName("");
+      setAycdKey("");
+      await loadKeys(true);
+      notify("AYCD key saved");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function testAycdKey() {
+    setTesting(true);
+    try {
+      const res = await fetch("/api/keys/aycd/test", { method: "POST" });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        count?: number;
+        from?: string | null;
+        subject?: string | null;
+        error?: string;
+      };
+      if (!data.ok) {
+        notify(data.error || "AYCD Inbox test failed");
+        return;
+      }
+      const sample = data.from || data.subject
+        ? ` · ${data.from ?? "unknown"} — ${data.subject ?? "(no subject)"}`
+        : "";
+      notify(`AYCD OK · ${data.count ?? 0} mail${data.count === 1 ? "" : "s"}${sample}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function deleteAycdKey() {
+    if (!selected || selected.group !== "aycd") return;
+    if (!confirm(`Delete ${selected.name}?`)) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/keys?slug=${encodeURIComponent(selected.slug)}`, { method: "DELETE" });
+      if (!res.ok) {
+        notify("Could not delete key");
+        return;
+      }
+      setSelectedSlug(null);
+      await loadKeys(true);
+      notify("AYCD key deleted");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 lg:px-6">
       <div className="mb-6">
@@ -157,14 +224,50 @@ export default function ApiKeysManager() {
           <Loader2 className="h-6 w-6 animate-spin text-[var(--carbon-text-muted)]" />
         </div>
       ) : !selected ? (
-        <KeyGrid
-          keys={keys}
-          balances={balances}
-          groupId={openGroup}
-          onBack={goBack}
-          onPickGroup={setOpenGroup}
-          onPickSlug={setSelectedSlug}
-        />
+        <div>
+          {openGroup === "aycd" && (
+            <div className="carbon-card mb-4 p-4">
+              <p className="carbon-section-header mb-3">Add AYCD key</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={aycdName}
+                  onChange={(e) => setAycdName(e.target.value)}
+                  placeholder="Name"
+                  className="carbon-input py-1.5 text-[13px] sm:w-40"
+                />
+                <input
+                  type="password"
+                  value={aycdKey}
+                  onChange={(e) => setAycdKey(e.target.value)}
+                  placeholder="Inbox-…"
+                  className="carbon-input flex-1 py-1.5 font-mono text-[12px]"
+                />
+                <button
+                  type="button"
+                  disabled={saving || !aycdName.trim() || !aycdKey.trim()}
+                  onClick={() => void addAycdKey()}
+                  className="carbon-btn-secondary inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-[12px]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Save
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-[var(--carbon-text-muted)]">
+                Paste your Inbox AYCD key (starts with Inbox-). It feeds the panel Inbox for
+                Outlook. AYCD Inbox must be running with Tasks enabled.
+              </p>
+              {flash && <p className="mt-3 text-[12px] text-[var(--carbon-text-secondary)]">{flash}</p>}
+            </div>
+          )}
+          <KeyGrid
+            keys={keys}
+            balances={balances}
+            groupId={openGroup}
+            onBack={goBack}
+            onPickGroup={setOpenGroup}
+            onPickSlug={setSelectedSlug}
+          />
+        </div>
       ) : (
         <section>
           <button
@@ -176,7 +279,8 @@ export default function ApiKeysManager() {
             {openGroup ? KEY_GROUPS.find((g) => g.id === openGroup)?.name ?? "Back" : "All providers"}
           </button>
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
             <h2 className="flex items-center gap-2 text-[15px] font-medium text-[var(--carbon-text)]">
               {selected.name}
               {selected.apiKey.trim() ? (
@@ -184,6 +288,28 @@ export default function ApiKeysManager() {
               ) : null}
             </h2>
             <p className="mt-0.5 text-xs text-[var(--carbon-text-muted)]">{selected.slug}</p>
+            </div>
+            {selected.group === "aycd" && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={testing || !selected.apiKey.trim()}
+                  onClick={() => void testAycdKey()}
+                  className="carbon-btn-secondary px-2.5 py-1.5 text-[12px]"
+                >
+                  {testing ? "Testing…" : "Test Inbox"}
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void deleteAycdKey()}
+                  className="carbon-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] hover:text-[var(--carbon-error)]"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="carbon-card mb-4 p-4">
@@ -243,7 +369,7 @@ export default function ApiKeysManager() {
               </div>
               <div>
                 <p className="mb-1 text-[11px] text-[var(--carbon-text-muted)]">Balance</p>
-                {!def?.balance || bal?.unsupported ? (
+                {!def?.balance || selected.group === "aycd" || bal?.unsupported ? (
                   <p className="text-[13px] text-[var(--carbon-text-muted)]">No balance API</p>
                 ) : loadingBal ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--carbon-text-muted)]" />

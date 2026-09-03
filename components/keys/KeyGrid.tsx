@@ -7,6 +7,7 @@ import { API_PROVIDERS, KEY_GROUPS, type ApiGroup } from "@/lib/apiProviders";
 type KeyRow = {
   slug: string;
   group: string;
+  name?: string;
   apiKey: string;
 };
 
@@ -111,7 +112,12 @@ export default function KeyGrid({
   const group = KEY_GROUPS.find((g) => g.id === groupId) ?? null;
 
   if (group) {
-    const providers = API_PROVIDERS.filter((p) => p.group === group.id);
+    const providers =
+      group.id === "aycd"
+        ? keys
+            .filter((k) => k.group === "aycd" && k.slug !== "aycd" && k.slug !== "aycd-autosolve")
+            .map((k) => ({ slug: k.slug, name: k.name || k.slug, group: "aycd" as const, balance: false }))
+        : API_PROVIDERS.filter((p) => p.group === group.id);
     return (
       <div>
         <button
@@ -123,13 +129,16 @@ export default function KeyGrid({
           All providers
         </button>
         <h2 className="mb-3 text-[15px] font-medium text-[var(--carbon-text)]">{group.name}</h2>
+        {providers.length === 0 ? (
+          <p className="mb-3 text-[13px] text-[var(--carbon-text-muted)]">No keys yet. Add one below.</p>
+        ) : null}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {providers.map((p) => (
             <Card
               key={p.slug}
               title={p.name}
-              subtitle={p.slug}
-              value={balanceLabel(p.slug, bySlug, balances)}
+              subtitle={group.id === "aycd" ? "AYCD" : p.slug}
+              value={group.id === "aycd" ? (bySlug.get(p.slug)?.apiKey.trim() ? "Saved" : "No key") : balanceLabel(p.slug, bySlug, balances)}
               configured={Boolean(bySlug.get(p.slug)?.apiKey.trim())}
               icon={groupIcon(group.id, true)}
               onClick={() => onPickSlug(p.slug)}
@@ -143,13 +152,20 @@ export default function KeyGrid({
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {KEY_GROUPS.map((g) => {
-        const slugs = API_PROVIDERS.filter((p) => p.group === g.id).map((p) => p.slug);
-        const saved = slugs.filter((slug) => bySlug.get(slug)?.apiKey.trim()).length;
+        const list =
+          g.id === "aycd"
+            ? keys.filter((k) => k.group === "aycd" && k.slug !== "aycd" && k.slug !== "aycd-autosolve")
+            : API_PROVIDERS.filter((p) => p.group === g.id);
+        const saved =
+          g.id === "aycd"
+            ? list.filter((k) => k.apiKey.trim()).length
+            : list.filter((p) => bySlug.get(p.slug)?.apiKey.trim()).length;
+        const total = list.length;
         return (
           <Card
             key={g.id}
             title={g.name}
-            subtitle={`${saved}/${slugs.length} keys saved`}
+            subtitle={g.id === "aycd" ? `${saved} key${saved === 1 ? "" : "s"} saved` : `${saved}/${total} keys saved`}
             configured={saved > 0}
             icon={groupIcon(g.id)}
             onClick={() => onPickGroup(g.id)}
