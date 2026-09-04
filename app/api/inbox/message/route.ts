@@ -17,9 +17,14 @@ export async function GET(req: NextRequest) {
   }
 
   if (mailboxId === AYCD_BOX_ID) {
-    const message = readAycdMessage(uid);
-    if (!message) return NextResponse.json({ error: "message not found" }, { status: 404 });
-    return NextResponse.json({ message }, { headers: { "Cache-Control": "private, max-age=60" } });
+    try {
+      const message = await readAycdMessage(uid);
+      if (!message) return NextResponse.json({ error: "message not found" }, { status: 404 });
+      return NextResponse.json({ message }, { headers: { "Cache-Control": "private, max-age=60" } });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "read failed";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
 
   const boxes = await loadImapBoxes(mailboxId);

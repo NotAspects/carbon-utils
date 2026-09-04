@@ -7,6 +7,7 @@ export type InboxMailbox = {
   slug?: string;
   name: string;
   email: string;
+  user?: string;
   host: string;
   port: number;
   password: string;
@@ -88,8 +89,12 @@ export function associatedTo(boxEmail: string, ...lists: (Addr[] | null | undefi
   return all.find((e) => e.toLowerCase() !== box) || all[0] || boxEmail;
 }
 
+function authUser(box: InboxMailbox) {
+  return (box.user || box.email).trim();
+}
+
 function poolKey(box: InboxMailbox) {
-  return `${box.host}:${box.port}:${box.email.toLowerCase()}`;
+  return `${box.host}:${box.port}:${authUser(box).toLowerCase()}`;
 }
 
 function boxScore(box: InboxMailbox) {
@@ -119,7 +124,7 @@ function connect(box: InboxMailbox) {
     host: box.host,
     port: box.port,
     secure: true,
-    auth: { user: box.email, pass: box.password },
+    auth: { user: authUser(box), pass: box.password },
     logger: false,
     disableAutoIdle: true,
     connectionTimeout: 8_000,

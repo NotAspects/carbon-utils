@@ -5,7 +5,7 @@ import { INBOX_PAGE_MAX, INBOX_PAGE_SIZE } from "@/lib/inboxLimits";
 import { listMailbox } from "@/lib/imapInbox";
 import { loadImapBoxes } from "@/lib/inboxBoxes";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const user = await requireAdmin();
@@ -21,13 +21,12 @@ export async function GET(req: NextRequest) {
   const force = req.nextUrl.searchParams.get("force") === "1";
 
   if (mailboxId === AYCD_BOX_ID) {
-    const data = await listAycdInbox(limit + offset);
-    const items = data.items.slice(offset, offset + limit);
+    const data = await listAycdInbox(limit, offset, force);
     return NextResponse.json(
       {
-        items,
+        items: data.items,
         error: data.error ?? null,
-        hasMore: data.items.length > offset + items.length,
+        hasMore: data.hasMore ?? false,
         mailbox: { id: AYCD_BOX_ID, name: "Outlook", email: "aycd" },
       },
       { headers: { "Cache-Control": force ? "no-store" : "private, max-age=20" } }

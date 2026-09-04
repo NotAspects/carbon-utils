@@ -253,8 +253,9 @@ export default function ApiKeysManager() {
                 </button>
               </div>
               <p className="mt-2 text-[11px] text-[var(--carbon-text-muted)]">
-                Paste your Inbox AYCD key (starts with Inbox-). It feeds the panel Inbox for
-                Outlook. AYCD Inbox must be running with Tasks enabled.
+                Paste your Inbox AYCD key (starts with Inbox-). Outlook Inbox uses UpLink IMAP
+                first; the key is used as IMAP login if AYCD_IMAP_USER / AYCD_IMAP_PASSWORD
+                are not set. Also enable IMAP Server + Remote Access on the RDP.
               </p>
               {flash && <p className="mt-3 text-[12px] text-[var(--carbon-text-secondary)]">{flash}</p>}
             </div>
