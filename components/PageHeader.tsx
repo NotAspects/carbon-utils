@@ -23,7 +23,7 @@ const PAGES: Record<string, { title: string; subtitle: string }> = {
   },
   inbox: {
     title: "Inbox",
-    subtitle: "To shows the associated address, not the Gmail forward.",
+    subtitle: "To shows the associated address, not the iCloud forward.",
   },
 };
 

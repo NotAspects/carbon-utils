@@ -135,7 +135,7 @@ function groupMailboxes(boxes: MailboxChip[]): BoxGroup[] {
   return [
     { id: "main", label: "Main", boxes: buckets.main },
     { id: "outlook", label: "Outlook", boxes: buckets.outlook },
-    { id: "gmail", label: "Gmail", boxes: buckets.gmail },
+    { id: "gmail", label: "iCloud", boxes: buckets.gmail },
     { id: "otp", label: "OTP", boxes: buckets.otp },
     { id: "catchalls", label: "Catchalls", boxes: buckets.catchalls },
   ].filter((g) => g.boxes.length);
@@ -151,7 +151,8 @@ function boxesForFilter(boxes: MailboxChip[], filter: string) {
 }
 
 function groupLogo(id: string) {
-  if (id === "main" || id === "gmail" || id === "otp") return mailLogoFor("forward", "forwardcarbon");
+  if (id === "main") return "/logos/gmail.svg";
+  if (id === "gmail" || id === "otp") return mailLogoFor("forward", "forwardcarbon");
   if (id === "outlook") return mailLogoFor("outlook", "outlook");
   return null;
 }

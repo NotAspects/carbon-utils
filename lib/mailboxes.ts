@@ -112,8 +112,8 @@ export const MAILBOX_CATALOG: MailboxSeed[] = [
 
 export const MAIL_GROUPS: MailGroup[] = [
   {
-    id: "gmail-forwards",
-    name: "Gmail",
+    id: "icloud-forwards",
+    name: "iCloud",
     hint: "Inboxes",
     children: MAILBOX_CATALOG.filter((m) => m.kind === "forward").map((m) => ({
       slug: m.slug,
@@ -144,7 +144,7 @@ export const MAIL_GROUPS: MailGroup[] = [
 ];
 
 export function mailLogoFor(kind: string, slug?: string): string | null {
-  if (kind === "forward" || slug?.startsWith("forward") || slug === "otp") return "/logos/gmail.svg";
+  if (kind === "forward" || slug?.startsWith("forward") || slug === "otp") return "/logos/icloud.svg";
   if (kind === "outlook" || slug === "outlook") return "/logos/outlook.svg";
   return null;
 }
