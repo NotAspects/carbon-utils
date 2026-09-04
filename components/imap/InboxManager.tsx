@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Inbox, Loader2, RefreshCw, Search, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Inbox, Loader2, Mail, RefreshCw, Search, X } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { INBOX_PAGE_MAX, INBOX_PAGE_SIZE, INBOX_POLL_MS, mapPool } from "@/lib/inboxLimits";
+import { mailLogoFor } from "@/lib/mailboxes";
 import { fetchJson, peekCache, setCache } from "@/lib/vaultCache";
 
 type InboxRow = {
@@ -112,30 +113,39 @@ function sortRows(rows: InboxRow[]) {
 
 type BoxGroup = { id: string; label: string; boxes: MailboxChip[] };
 
+function boxKind(box: MailboxChip) {
+  const name = box.name.toLowerCase();
+  const email = box.email.toLowerCase();
+  if (box.id === "aycd" || email === "aycd" || name === "outlook") return "outlook";
+  if (name === "otp" || email.startsWith("otp@")) return "otp";
+  if (name.startsWith("@")) return "catchalls";
+  return "gmail";
+}
+
 function groupMailboxes(boxes: MailboxChip[]): BoxGroup[] {
-  const outlook: MailboxChip[] = [];
-  const otp: MailboxChip[] = [];
-  const catchalls: MailboxChip[] = [];
-  const gmail: MailboxChip[] = [];
-  for (const box of boxes) {
-    const name = box.name.toLowerCase();
-    const email = box.email.toLowerCase();
-    if (box.id === "aycd" || email === "aycd" || name === "outlook") outlook.push(box);
-    else if (name === "otp" || email.startsWith("otp@")) otp.push(box);
-    else if (name.startsWith("@") || email.startsWith("@")) catchalls.push(box);
-    else gmail.push(box);
-  }
+  const buckets: Record<string, MailboxChip[]> = { outlook: [], otp: [], gmail: [], catchalls: [] };
+  for (const box of boxes) buckets[boxKind(box)].push(box);
   return [
-    { id: "outlook", label: "Outlook", boxes: outlook },
-    { id: "otp", label: "OTP", boxes: otp },
-    { id: "gmail", label: "Gmail", boxes: gmail },
-    { id: "catchalls", label: "Catchalls", boxes: catchalls },
+    { id: "outlook", label: "Outlook", boxes: buckets.outlook },
+    { id: "gmail", label: "Gmail", boxes: buckets.gmail },
+    { id: "otp", label: "OTP", boxes: buckets.otp },
+    { id: "catchalls", label: "Catchalls", boxes: buckets.catchalls },
   ].filter((g) => g.boxes.length);
 }
 
-function mailboxLabel(boxes: MailboxChip[], filter: string) {
-  if (filter === "all") return "All inboxes";
-  return boxes.find((b) => b.email.toLowerCase() === filter)?.name || filter;
+function boxesForFilter(boxes: MailboxChip[], filter: string) {
+  if (filter === "all") return boxes;
+  if (filter.startsWith("g:")) {
+    const id = filter.slice(2);
+    return groupMailboxes(boxes).find((g) => g.id === id)?.boxes ?? [];
+  }
+  return boxes.filter((b) => b.email.toLowerCase() === filter);
+}
+
+function groupLogo(id: string) {
+  if (id === "outlook") return mailLogoFor("outlook", "outlook");
+  if (id === "gmail" || id === "otp") return mailLogoFor("forward", "forwardcarbon");
+  return null;
 }
 
 function collectInbox(): CachedInbox {
@@ -255,7 +265,7 @@ export default function InboxManager() {
       setLoading(false);
       if (new URLSearchParams(window.location.search).get("source") === "aycd") {
         const aycd = boxes.find((b) => b.id === "aycd" || b.email === "aycd");
-        if (aycd) setFilter(aycd.email.toLowerCase());
+        if (aycd) setFilter("g:outlook");
       }
 
       const latest = (await boxesP)?.mailboxes;
@@ -293,34 +303,33 @@ export default function InboxManager() {
   }, [queryLive]);
 
   const shown = useMemo(() => {
-    const scoped = filter === "all" ? items : items.filter((m) => m.mailboxEmail.toLowerCase() === filter);
+    const allowed = new Set(boxesForFilter(mailboxes, filter).map((b) => b.email.toLowerCase()));
+    const scoped = filter === "all" ? items : items.filter((m) => allowed.has(m.mailboxEmail.toLowerCase()));
     if (!query.trim()) return scoped;
     return scoped.filter((row) => rowMatches(row, query));
-  }, [items, filter, query]);
+  }, [items, filter, query, mailboxes]);
 
   const threads = useMemo(() => buildThreads(shown), [shown]);
   const activeThread = threads.find((t) => t.key === openThread) ?? null;
   const selected = shown.find((m) => m.id === selectedId) ?? null;
-  const canLoadMore = useMemo(() => {
-    const targets =
-      filter === "all" ? mailboxes : mailboxes.filter((box) => box.email.toLowerCase() === filter);
-    return targets.some((box) => hasMoreByBox[box.id] === true);
-  }, [filter, mailboxes, hasMoreByBox]);
+  const filterBoxes = useMemo(() => boxesForFilter(mailboxes, filter), [mailboxes, filter]);
+  const canLoadMore = useMemo(
+    () => filterBoxes.some((box) => hasMoreByBox[box.id] === true),
+    [filterBoxes, hasMoreByBox]
+  );
+  const loadBatch = filterBoxes.length === 1 ? INBOX_PAGE_MAX : INBOX_PAGE_SIZE;
 
   async function loadMore() {
-    const targets = (
-      filter === "all" ? mailboxes : mailboxes.filter((box) => box.email.toLowerCase() === filter)
-    ).filter((box) => hasMoreByBox[box.id] === true);
+    const targets = filterBoxes.filter((box) => hasMoreByBox[box.id] === true);
     if (!targets.length || loadingMore) return;
     setLoadingMore(true);
-    const batch = filter === "all" ? INBOX_PAGE_SIZE : INBOX_PAGE_MAX;
     try {
       const counts = new Map<string, number>();
       for (const row of items) counts.set(row.mailboxId, (counts.get(row.mailboxId) ?? 0) + 1);
       const hits = await mapPool(targets, 2, async (box) => {
         const offset = counts.get(box.id) ?? 0;
         const res = await fetch(
-          `/api/inbox?mailboxId=${encodeURIComponent(box.id)}&limit=${batch}&offset=${offset}`
+          `/api/inbox?mailboxId=${encodeURIComponent(box.id)}&limit=${loadBatch}&offset=${offset}`
         );
         const data = (await res.json()) as BoxPayload;
         return { box, data };
@@ -415,7 +424,7 @@ export default function InboxManager() {
         )}
       </div>
 
-      <MailboxPicker boxes={mailboxes} filter={filter} onChange={setFilter} />
+      <InboxSourceBar boxes={mailboxes} filter={filter} onChange={setFilter} />
 
       {warning && <p className="mb-3 text-[12px] text-[var(--carbon-text-muted)]">{warning}</p>}
       {errors.length > 0 && (
@@ -442,7 +451,9 @@ export default function InboxManager() {
                   className="carbon-btn-secondary mt-2 inline-flex items-center gap-1.5 px-3 py-2 text-[12px]"
                 >
                   {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {filter === "all" ? "Load older messages" : `Load ${INBOX_PAGE_MAX} older messages`}
+                  {loadBatch === INBOX_PAGE_MAX
+                    ? `Load ${INBOX_PAGE_MAX} older messages`
+                    : "Load older messages"}
                 </button>
               )}
             </div>
@@ -523,7 +534,9 @@ export default function InboxManager() {
                     className="carbon-btn-secondary flex w-full items-center justify-center gap-1.5 py-2 text-[12px]"
                   >
                     {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {filter === "all" ? "Load older messages" : `Load ${INBOX_PAGE_MAX} older messages`}
+                    {loadBatch === INBOX_PAGE_MAX
+                    ? `Load ${INBOX_PAGE_MAX} older messages`
+                    : "Load older messages"}
                   </button>
                 </div>
               )}
@@ -578,7 +591,7 @@ export default function InboxManager() {
   );
 }
 
-function MailboxPicker({
+function InboxSourceBar({
   boxes,
   filter,
   onChange,
@@ -587,64 +600,65 @@ function MailboxPicker({
   filter: string;
   onChange: (value: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
   const groups = useMemo(() => groupMailboxes(boxes), [boxes]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  function pick(value: string) {
-    onChange(value);
-    setOpen(false);
-  }
+  const activeGroup =
+    filter.startsWith("g:")
+      ? groups.find((g) => g.id === filter.slice(2))
+      : groups.find((g) => g.boxes.some((b) => b.email.toLowerCase() === filter));
+  const children = activeGroup && activeGroup.boxes.length > 1 ? activeGroup.boxes : [];
 
   return (
-    <div ref={root} className="relative mb-3 max-w-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="carbon-input flex items-center justify-between gap-2 py-2 text-left text-[13px]"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-      >
-        <span className="truncate">{mailboxLabel(boxes, filter)}</span>
-        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-[var(--carbon-text-muted)] transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div
-          role="listbox"
-          className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto rounded-xl border border-[var(--carbon-border)] bg-[var(--carbon-bg-elevated)] py-1 shadow-lg"
-        >
-          <PickerRow label="All inboxes" active={filter === "all"} onClick={() => pick("all")} />
-          {groups.map((group) => (
-            <div key={group.id} className="mt-1 border-t border-[var(--carbon-border)] pt-1">
-              <p className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-[var(--carbon-text-muted)]">
-                {group.label}
-              </p>
-              {group.boxes.map((box) => (
-                <PickerRow
-                  key={box.id}
-                  label={box.name}
-                  hint={box.email !== "aycd" && box.email !== box.name ? box.email : undefined}
-                  active={filter === box.email.toLowerCase()}
-                  onClick={() => pick(box.email.toLowerCase())}
-                />
-              ))}
-            </div>
+    <div className="mb-3">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        <SourceTab
+          label="All"
+          active={filter === "all"}
+          onClick={() => onChange("all")}
+        />
+        {groups.map((group) => {
+          const logo = groupLogo(group.id);
+          const value = group.boxes.length === 1 ? group.boxes[0].email.toLowerCase() : `g:${group.id}`;
+          const active =
+            filter === value ||
+            filter === `g:${group.id}` ||
+            group.boxes.some((b) => b.email.toLowerCase() === filter);
+          return (
+            <SourceTab
+              key={group.id}
+              label={group.label}
+              logo={logo}
+              active={active}
+              onClick={() => onChange(value)}
+            />
+          );
+        })}
+      </div>
+      {activeGroup && children.length > 0 && (
+        <div className="mt-2 flex gap-1.5 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => onChange(`g:${activeGroup.id}`)}
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] ${
+              filter === `g:${activeGroup.id}`
+                ? "bg-white text-[var(--carbon-bg)]"
+                : "text-[var(--carbon-text-muted)] hover:text-[var(--carbon-text)]"
+            }`}
+          >
+            All {activeGroup.label}
+          </button>
+          {children.map((box) => (
+            <button
+              key={box.id}
+              type="button"
+              onClick={() => onChange(box.email.toLowerCase())}
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] ${
+                filter === box.email.toLowerCase()
+                  ? "bg-white text-[var(--carbon-bg)]"
+                  : "text-[var(--carbon-text-muted)] hover:text-[var(--carbon-text)]"
+              }`}
+            >
+              {box.name}
+            </button>
           ))}
         </div>
       )}
@@ -652,32 +666,40 @@ function MailboxPicker({
   );
 }
 
-function PickerRow({
+function SourceTab({
   label,
-  hint,
+  logo,
   active,
   onClick,
 }: {
   label: string;
-  hint?: string;
+  logo?: string | null;
   active: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      role="option"
-      aria-selected={active}
       onClick={onClick}
-      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-[var(--carbon-bg-hover)] ${
-        active ? "text-white" : "text-[var(--carbon-text-secondary)]"
+      className={`flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-[13px] font-medium transition-colors ${
+        active
+          ? "border-white/20 bg-[var(--carbon-bg-hover)] text-white"
+          : "border-[var(--carbon-border)] bg-[var(--carbon-bg-elevated)] text-[var(--carbon-text-muted)] hover:text-[var(--carbon-text)]"
       }`}
     >
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-        {active && <Check className="h-3.5 w-3.5" />}
-      </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {hint && <span className="max-w-[40%] truncate text-[11px] text-[var(--carbon-text-muted)]">{hint}</span>}
+      {logo ? (
+        <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-md bg-white p-0.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logo} alt="" className="h-full w-full object-contain" />
+        </span>
+      ) : label === "All" ? (
+        <Inbox className="h-3.5 w-3.5" />
+      ) : (
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--carbon-bg)]">
+          <Mail className="h-3.5 w-3.5" />
+        </span>
+      )}
+      {label}
     </button>
   );
 }
