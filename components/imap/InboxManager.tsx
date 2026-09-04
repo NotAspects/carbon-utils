@@ -116,6 +116,7 @@ type BoxGroup = { id: string; label: string; boxes: MailboxChip[] };
 function boxKind(box: MailboxChip) {
   const name = box.name.toLowerCase();
   const email = box.email.toLowerCase();
+  if (box.id === "main" || name === "main") return "main";
   if (box.id === "aycd" || email === "aycd" || name === "outlook") return "outlook";
   if (name === "otp" || email.startsWith("otp@")) return "otp";
   if (name.startsWith("@")) return "catchalls";
@@ -123,9 +124,16 @@ function boxKind(box: MailboxChip) {
 }
 
 function groupMailboxes(boxes: MailboxChip[]): BoxGroup[] {
-  const buckets: Record<string, MailboxChip[]> = { outlook: [], otp: [], gmail: [], catchalls: [] };
+  const buckets: Record<string, MailboxChip[]> = {
+    main: [],
+    outlook: [],
+    otp: [],
+    gmail: [],
+    catchalls: [],
+  };
   for (const box of boxes) buckets[boxKind(box)].push(box);
   return [
+    { id: "main", label: "Main", boxes: buckets.main },
     { id: "outlook", label: "Outlook", boxes: buckets.outlook },
     { id: "gmail", label: "Gmail", boxes: buckets.gmail },
     { id: "otp", label: "OTP", boxes: buckets.otp },
@@ -143,8 +151,8 @@ function boxesForFilter(boxes: MailboxChip[], filter: string) {
 }
 
 function groupLogo(id: string) {
+  if (id === "main" || id === "gmail" || id === "otp") return mailLogoFor("forward", "forwardcarbon");
   if (id === "outlook") return mailLogoFor("outlook", "outlook");
-  if (id === "gmail" || id === "otp") return mailLogoFor("forward", "forwardcarbon");
   return null;
 }
 

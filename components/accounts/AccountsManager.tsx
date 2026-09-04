@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Download, FileUp, Loader2, Search, ShieldAlert } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
-import { ACCOUNT_STATUSES, PLATFORM_CATALOG, isTicketmasterSlug, logoContain, logoFor, type AccountStatus, type ParsedAccount } from "@/lib/sites";
+import { ACCOUNT_STATUSES, PLATFORM_CATALOG, isTicketmasterSlug, logoContain, logoFor, logoInvert, logoZoom, type AccountStatus, type ParsedAccount } from "@/lib/sites";
 import PlatformGrid from "./PlatformGrid";
 import ExportCsv from "./ExportCsv";
 import AccountsSheet from "./AccountsSheet";
@@ -318,7 +318,13 @@ export default function AccountsManager() {
                   {logoFor(selected.slug) && (
                     <span
                       className={`h-9 w-9 shrink-0 overflow-hidden rounded-lg ${
-                        logoContain(selected.slug) ? "bg-white p-0.5" : ""
+                        logoInvert(selected.slug)
+                          ? "bg-[var(--carbon-bg)] p-1"
+                          : logoContain(selected.slug)
+                            ? logoZoom(selected.slug)
+                              ? "bg-white"
+                              : "bg-white p-0.5"
+                            : ""
                       }`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -327,6 +333,8 @@ export default function AccountsManager() {
                         alt=""
                         className={`h-full w-full ${
                           logoContain(selected.slug) ? "object-contain" : "object-cover"
+                        } ${logoInvert(selected.slug) ? "brightness-0 invert" : ""} ${
+                          logoZoom(selected.slug) ? "scale-[1.7]" : ""
                         }`}
                       />
                     </span>

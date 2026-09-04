@@ -75,12 +75,20 @@ export function logoFor(key: string): string | null {
     if (key === "fifa") return "/logos/fifa.jpeg";
     return null;
   })();
-  return path ? `${path}?v=4` : null;
+  return path ? `${path}?v=5` : null;
 }
 
 /** Wordmarks that need the full image on white — do not crop. */
 export function logoContain(key: string) {
   return key === "axs" || key === "olympics-la28";
+}
+
+export function logoInvert(key: string) {
+  return key === "tomorrowland";
+}
+
+export function logoZoom(key: string) {
+  return key === "olympics-la28";
 }
 
 export const ACCOUNT_STATUSES = ["active", "used", "banned", "inactive", "kyc"] as const;

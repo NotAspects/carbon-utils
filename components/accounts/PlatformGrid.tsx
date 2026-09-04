@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import type { CatalogPlatform } from "@/lib/sites";
-import { PLATFORM_CATALOG, logoContain, logoFor } from "@/lib/sites";
+import { PLATFORM_CATALOG, logoContain, logoFor, logoInvert, logoZoom } from "@/lib/sites";
 import type { SiteRow } from "./AccountsManager";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -45,6 +45,8 @@ function Card({
   count,
   logo,
   contain,
+  invert,
+  zoom,
   icon: Icon = Globe,
   onClick,
 }: {
@@ -53,6 +55,8 @@ function Card({
   count: number;
   logo?: string | null;
   contain?: boolean;
+  invert?: boolean;
+  zoom?: boolean;
   icon?: React.ComponentType<{ className?: string }>;
   onClick: () => void;
 }) {
@@ -64,7 +68,7 @@ function Card({
     >
       <span
         className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ${
-          contain ? "bg-white p-1" : ""
+          contain && !invert ? (zoom ? "bg-white" : "bg-white p-1") : invert ? "bg-[var(--carbon-bg)] p-1.5" : ""
         }`}
       >
         {logo ? (
@@ -72,7 +76,9 @@ function Card({
           <img
             src={logo}
             alt=""
-            className={`h-full w-full ${contain ? "object-contain" : "object-cover"}`}
+            className={`h-full w-full ${contain ? "object-contain" : "object-cover"} ${
+              invert ? "brightness-0 invert" : ""
+            } ${zoom ? "scale-[1.7]" : ""}`}
           />
         ) : (
           <span className="flex h-full w-full items-center justify-center bg-[var(--carbon-bg)]">
@@ -128,6 +134,8 @@ export default function PlatformGrid({
               count={bySlug.get(child.slug)?.total ?? 0}
               logo={logoFor(child.slug) ?? logoFor(group.id)}
               contain={logoContain(child.slug) || logoContain(group.id)}
+              invert={logoInvert(child.slug) || logoInvert(group.id)}
+              zoom={logoZoom(child.slug) || logoZoom(group.id)}
               icon={ICONS[group.id]}
               onClick={() => onPickSlug(child.slug)}
             />
@@ -152,6 +160,8 @@ export default function PlatformGrid({
             count={countFor(platform, bySlug)}
             logo={logoFor(platform.id) ?? (platform.slug ? logoFor(platform.slug) : null)}
             contain={logoContain(platform.id) || (platform.slug ? logoContain(platform.slug) : false)}
+            invert={logoInvert(platform.id) || (platform.slug ? logoInvert(platform.slug) : false)}
+            zoom={logoZoom(platform.id) || (platform.slug ? logoZoom(platform.slug) : false)}
             icon={ICONS[platform.id]}
             onClick={() => onPickPlatform(platform)}
           />

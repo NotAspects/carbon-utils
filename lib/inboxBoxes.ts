@@ -1,8 +1,11 @@
-import { aycdBox, AYCD_BOX_ID } from "@/lib/aycdInbox";
+import { AYCD_BOX_ID } from "@/lib/aycdInbox";
+import { MAIN_BOX_ID, mainImapBox } from "@/lib/mainInbox";
 import { prisma } from "@/lib/prisma";
 import { uniqueBoxes, type InboxMailbox } from "@/lib/imapInbox";
 
 export async function resolveImapBox(id: string): Promise<InboxMailbox | null> {
+  if (id === MAIN_BOX_ID) return mainImapBox();
+
   const mailbox = await prisma.mailbox.findUnique({
     where: { id },
     select: {
@@ -48,6 +51,10 @@ export async function resolveImapBox(id: string): Promise<InboxMailbox | null> {
 
 export async function loadImapBoxes(mailboxId?: string | null): Promise<InboxMailbox[]> {
   if (mailboxId === AYCD_BOX_ID) return [];
+  if (mailboxId === MAIN_BOX_ID) {
+    const main = mainImapBox();
+    return main ? [main] : [];
+  }
 
   if (mailboxId) {
     const box = await resolveImapBox(mailboxId);
@@ -68,8 +75,10 @@ export async function loadImapBoxes(mailboxId?: string | null): Promise<InboxMai
       kind: true,
     },
   });
-  return uniqueBoxes(
-    rows
+  const main = mainImapBox();
+  return uniqueBoxes([
+    ...(main ? [main] : []),
+    ...rows
       .filter((r) => r.password?.trim())
       .map((r) => ({
         id: r.id,
@@ -80,6 +89,6 @@ export async function loadImapBoxes(mailboxId?: string | null): Promise<InboxMai
         port: r.port,
         password: r.password!,
         kind: r.kind,
-      }))
-  );
+      })),
+  ]);
 }
