@@ -310,7 +310,7 @@ function MonthGrid({
                     }`}
                   >
                     <span
-                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px] ${
+                      className={`relative z-10 inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px] ${
                         today
                           ? "bg-[#e74c3c] font-semibold text-white"
                           : inMonth
@@ -323,7 +323,7 @@ function MonthGrid({
                   </button>
                 );
               })}
-              <div className="pointer-events-none absolute inset-x-0 top-8 bottom-1 px-0.5">
+              <div className="pointer-events-none absolute inset-x-0 bottom-1 top-9 px-0.5">
                 {shown.map((lane, li) => (
                   <div key={li} className="mb-0.5 grid grid-cols-7 gap-0.5">
                     {lane.map((item) => (

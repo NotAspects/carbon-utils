@@ -23,14 +23,16 @@ function Card({
       onClick={onClick}
       className="carbon-card flex items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-[var(--carbon-bg-hover)]"
     >
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1.5">
+      <span
+        className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl p-1.5 ${
+          logo ? "bg-white" : "bg-[var(--carbon-bg)]"
+        }`}
+      >
         {logo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logo} alt="" className="h-full w-full object-contain" />
         ) : (
-          <span className="flex h-full w-full items-center justify-center rounded-lg bg-[var(--carbon-bg)]">
-            <Mail className="h-5 w-5 text-[var(--carbon-text-muted)]" />
-          </span>
+          <Mail className="h-5 w-5 text-[var(--carbon-text-muted)]" />
         )}
       </span>
       <div className="min-w-0 flex-1">
