@@ -152,15 +152,15 @@ export default function KeyGrid({
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {KEY_GROUPS.map((g) => {
-        const list =
-          g.id === "aycd"
-            ? keys.filter((k) => k.group === "aycd" && k.slug !== "aycd" && k.slug !== "aycd-autosolve")
-            : API_PROVIDERS.filter((p) => p.group === g.id);
+        const aycdKeys = keys.filter(
+          (k) => k.group === "aycd" && k.slug !== "aycd" && k.slug !== "aycd-autosolve"
+        );
+        const providers = API_PROVIDERS.filter((p) => p.group === g.id);
         const saved =
           g.id === "aycd"
-            ? list.filter((k) => k.apiKey.trim()).length
-            : list.filter((p) => bySlug.get(p.slug)?.apiKey.trim()).length;
-        const total = list.length;
+            ? aycdKeys.filter((k) => k.apiKey.trim()).length
+            : providers.filter((p) => bySlug.get(p.slug)?.apiKey.trim()).length;
+        const total = g.id === "aycd" ? aycdKeys.length : providers.length;
         return (
           <Card
             key={g.id}
