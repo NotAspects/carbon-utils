@@ -21,19 +21,16 @@ export async function aycdImapBox(): Promise<InboxMailbox | null> {
   if (!host) return null;
   const user = process.env.AYCD_IMAP_USER?.trim() || "";
   const pass = process.env.AYCD_IMAP_PASSWORD?.trim() || "";
-  const key = user && pass ? null : await loadAycdKey();
-  const authUser = user || key;
-  const authPass = pass || key;
-  if (!authUser || !authPass) return null;
+  if (!user || !pass) return null;
   return {
     id: AYCD_BOX_ID,
     slug: "aycd",
     name: "Outlook",
     email: "aycd",
-    user: authUser,
+    user,
     host,
     port: Number(process.env.AYCD_IMAP_PORT) || 993,
-    password: authPass,
+    password: pass,
     kind: "outlook",
   };
 }
@@ -190,7 +187,7 @@ export async function listAycdInbox(
       return {
         items: [],
         error:
-          "Set AYCD_IMAP_USER and AYCD_IMAP_PASSWORD in .env (Inbox → Mail → IMAP Service), or add an Inbox key in Keys.",
+          "AYCD IMAP login missing. On Vercel, set AYCD_IMAP_HOST, AYCD_IMAP_PORT, AYCD_IMAP_USER, AYCD_IMAP_PASSWORD (Inbox → Mail → IMAP Service: inbox@aycd.me + the IMAP password). Then redeploy.",
       };
     }
     const data = await listMailbox(box, limit, force, offset);

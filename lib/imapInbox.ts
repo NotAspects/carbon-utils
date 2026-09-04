@@ -119,7 +119,20 @@ function toIso(value?: Date | string | null) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+function imapError(box: InboxMailbox, e: unknown) {
+  const err = e && typeof e === "object" ? (e as Record<string, unknown>) : {};
+  const message = e instanceof Error ? e.message : "IMAP error";
+  if (err.authenticationFailed) {
+    return `${box.name}: IMAP login failed. Check AYCD_IMAP_USER and AYCD_IMAP_PASSWORD on the host (Vercel env vars in production).`;
+  }
+  const response = typeof err.response === "string" ? err.response.replace(/\s+/g, " ").slice(0, 120) : "";
+  const code = typeof err.serverResponseCode === "string" ? err.serverResponseCode : "";
+  const extra = [code, response].filter(Boolean).join(" · ");
+  return extra ? `${box.name}: ${message} (${extra})` : `${box.name}: ${message}`;
+}
+
 function connect(box: InboxMailbox) {
+  const serverless = Boolean(process.env.VERCEL);
   return new ImapFlow({
     host: box.host,
     port: box.port,
@@ -127,8 +140,8 @@ function connect(box: InboxMailbox) {
     auth: { user: authUser(box), pass: box.password },
     logger: false,
     disableAutoIdle: true,
-    connectionTimeout: 8_000,
-    greetingTimeout: 8_000,
+    connectionTimeout: serverless ? 20_000 : 8_000,
+    greetingTimeout: serverless ? 20_000 : 8_000,
     socketTimeout: 5 * 60_000,
   });
 }
@@ -264,8 +277,8 @@ async function listOne(box: InboxMailbox, limit: number, offset = 0): Promise<Li
       }
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "IMAP error";
-    return { at: Date.now(), items: [], error: `${box.email}: ${message}`, hasMore: false };
+    const message = imapError(box, e);
+    return { at: Date.now(), items: [], error: message, hasMore: false };
   }
 }
 
