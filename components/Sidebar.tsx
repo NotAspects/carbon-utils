@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Globe, Inbox, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
+import { CalendarDays, Globe, Inbox, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
 import { useState, useEffect } from "react";
 import { prefetchPath } from "@/lib/vaultCache";
 
@@ -14,10 +14,11 @@ type NavItem = {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  group: "vault" | "mail";
+  group: "planning" | "vault" | "mail";
 };
 
 const NAV: NavItem[] = [
+  { name: "Calendar", href: "/planning", icon: CalendarDays, group: "planning" },
   { name: "Accounts", href: "/accounts", icon: Users, group: "vault" },
   { name: "ISP", href: "/isp", icon: Globe, group: "vault" },
   { name: "API keys", href: "/keys", icon: KeyRound, group: "vault" },
@@ -26,6 +27,7 @@ const NAV: NavItem[] = [
 ];
 
 const GROUPS: { id: NavItem["group"]; label: string }[] = [
+  { id: "planning", label: "Planning" },
   { id: "vault", label: "Vault" },
   { id: "mail", label: "Mail" },
 ];

@@ -1,6 +1,10 @@
 "use client";
 
 const PAGES: Record<string, { title: string; subtitle: string }> = {
+  planning: {
+    title: "Planning",
+    subtitle: "Assign tasks to your team on the calendar.",
+  },
   accounts: {
     title: "Accounts",
     subtitle: "Pick a site to view and import accounts.",

@@ -88,3 +88,21 @@ model ApiKey {
 
   @@index([group])
 }
+
+model PlanTask {
+  id        String   @id @default(cuid())
+  title     String
+  assignee  String   @default("")
+  notes     String   @default("")
+  color     String   @default("#6aa4e8")
+  startAt   DateTime
+  endAt     DateTime
+  allDay    Boolean  @default(true)
+  done      Boolean  @default(false)
+  createdBy String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startAt, endAt])
+  @@index([assignee])
+}

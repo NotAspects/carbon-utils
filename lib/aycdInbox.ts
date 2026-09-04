@@ -16,12 +16,33 @@ export function aycdImapHost() {
   return process.env.AYCD_IMAP_HOST?.trim() || AYCD_IMAP_HOST_DEFAULT;
 }
 
-export async function aycdImapBox(): Promise<InboxMailbox | null> {
+function envValue(name: string) {
+  let value = process.env[name]?.trim() || "";
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
+  return value;
+}
+
+function looksLikeInboxApiKey(value: string) {
+  return /^inbox-/i.test(value);
+}
+
+export async function aycdImapBox(): Promise<InboxMailbox | { error: string } | null> {
   const host = aycdImapHost();
   if (!host) return null;
-  const user = process.env.AYCD_IMAP_USER?.trim() || "";
-  const pass = process.env.AYCD_IMAP_PASSWORD?.trim() || "";
+  const user = envValue("AYCD_IMAP_USER");
+  const pass = envValue("AYCD_IMAP_PASSWORD");
   if (!user || !pass) return null;
+  if (looksLikeInboxApiKey(user) || looksLikeInboxApiKey(pass)) {
+    return {
+      error:
+        "AYCD_IMAP_PASSWORD is an Inbox API key (Inbox-…). IMAP needs inbox@aycd.me + the Password field from Inbox → Mail → IMAP Service, then redeploy.",
+    };
+  }
   return {
     id: AYCD_BOX_ID,
     slug: "aycd",
@@ -29,7 +50,7 @@ export async function aycdImapBox(): Promise<InboxMailbox | null> {
     email: "aycd",
     user,
     host,
-    port: Number(process.env.AYCD_IMAP_PORT) || 993,
+    port: Number(envValue("AYCD_IMAP_PORT")) || 993,
     password: pass,
     kind: "outlook",
   };
@@ -183,11 +204,12 @@ export async function listAycdInbox(
 ): Promise<{ items: InboxItem[]; error?: string; hasMore?: boolean }> {
   if (aycdImapHost()) {
     const box = await aycdImapBox();
+    if (box && "error" in box) return { items: [], error: box.error };
     if (!box) {
       return {
         items: [],
         error:
-          "AYCD IMAP login missing. On Vercel, set AYCD_IMAP_HOST, AYCD_IMAP_PORT, AYCD_IMAP_USER, AYCD_IMAP_PASSWORD (Inbox → Mail → IMAP Service: inbox@aycd.me + the IMAP password). Then redeploy.",
+          "AYCD IMAP login missing. On Vercel, set AYCD_IMAP_USER=inbox@aycd.me and AYCD_IMAP_PASSWORD to the IMAP Service password (not the Inbox- API key), then Redeploy.",
       };
     }
     const data = await listMailbox(box, limit, force, offset);
@@ -235,7 +257,7 @@ export async function listAycdInbox(
 
 export async function readAycdMessage(uid: number): Promise<InboxMessage | null> {
   const box = await aycdImapBox();
-  if (box) return readMessage(box, uid);
+  if (box && "host" in box) return readMessage(box, uid);
   return bodies.get(uid) ?? null;
 }
 

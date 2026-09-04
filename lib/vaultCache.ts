@@ -111,4 +111,5 @@ export function prefetchPath(href: string) {
   if (href === "/keys") void fetchJson("keys", "/api/keys");
   if (href === "/isp") void fetchJson("proxies", "/api/proxies");
   if (href === "/inbox") void fetchJson("inbox-boxes", "/api/inbox/boxes");
+  if (href === "/planning") void fetchJson("planning", "/api/planning");
 }
