@@ -18,7 +18,7 @@ export const SHEET_COLUMNS = [
 
 export type SheetColId = (typeof SHEET_COLUMNS)[number]["id"];
 
-const DEFAULT_COLS: SheetColId[] = ["email", "password", "phone", "first_name", "last_name", "status"];
+const DEFAULT_COLS: SheetColId[] = ["email", "password"];
 const ROW_H = 28;
 const HEAD_H = 32;
 const INDEX_W = 40;
@@ -345,7 +345,7 @@ function AccountsSheet({
   onPatch: (id: string, data: Partial<AccountRow>) => void;
   onAdd: (entries: ParsedAccount[]) => void;
 }) {
-  const colsKey = `carbon-sheet-cols:${siteId}`;
+  const colsKey = `carbon-sheet-cols-v2:${siteId}`;
   const colorsKey = `carbon-sheet-colors:${siteId}`;
   const scroller = useRef<HTMLDivElement>(null);
   const tableWrap = useRef<HTMLDivElement>(null);
