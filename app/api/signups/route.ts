@@ -4,12 +4,11 @@ import { prisma } from "@/lib/prisma";
 
 // Sites de sign-ups : tout site dont le slug se termine par "-signups"
 async function signupSites() {
-  const sites = await prisma.site.findMany({
+  return prisma.site.findMany({
     where: { slug: { endsWith: "-signups" } },
     orderBy: { name: "asc" },
     include: { _count: { select: { accounts: true } } },
   });
-  return sites;
 }
 
 export async function GET(req: NextRequest) {
@@ -37,4 +36,61 @@ export async function GET(req: NextRequest) {
     { site: { slug: site.slug, name: site.name }, accounts },
     { headers: { "Cache-Control": "private, max-age=15" } },
   );
+}
+
+// Créer une catégorie de sign-ups, et/ou y ajouter des mails en masse
+export async function POST(req: NextRequest) {
+  const user = await requireAdmin();
+  if (!user) return unauthorized();
+
+  const body = (await req.json()) as { name?: string; mails?: string };
+  const name = body.name?.trim();
+  if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
+
+  const slug =
+    name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-signups";
+  const site = await prisma.site.upsert({
+    where: { slug },
+    update: {},
+    create: { slug, name },
+  });
+
+  let added = 0;
+  if (body.mails?.trim()) {
+    const seen = new Set<string>();
+    const existing = new Set(
+      (await prisma.account.findMany({ where: { siteId: site.id }, select: { login: true } })).map(
+        (a) => a.login.toLowerCase(),
+      ),
+    );
+    const rows = body.mails
+      .split(/[\s,;]+/)
+      .map((l) => l.trim())
+      .filter((l) => l.includes("@"))
+      .filter((l) => {
+        const k = l.toLowerCase();
+        if (seen.has(k) || existing.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .map((login) => ({ siteId: site.id, login, status: "active" }));
+    if (rows.length) added = (await prisma.account.createMany({ data: rows })).count;
+  }
+
+  return NextResponse.json({ slug: site.slug, added });
+}
+
+// Supprimer une catégorie (les comptes sont supprimés en cascade)
+export async function DELETE(req: NextRequest) {
+  const user = await requireAdmin();
+  if (!user) return unauthorized();
+
+  const siteSlug = req.nextUrl.searchParams.get("site");
+  if (!siteSlug) return NextResponse.json({ error: "site required" }, { status: 400 });
+
+  const site = await prisma.site.findUnique({ where: { slug: siteSlug } });
+  if (!site) return NextResponse.json({ error: "site not found" }, { status: 404 });
+
+  await prisma.site.delete({ where: { id: site.id } });
+  return NextResponse.json({ deleted: site.slug });
 }
