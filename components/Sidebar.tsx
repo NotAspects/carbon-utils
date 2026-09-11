@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { CalendarDays, Globe, Inbox, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users } from "lucide-react";
+import { CalendarDays, Globe, Inbox, KeyRound, LogOut, Menu, X, ChevronLeft, Mail, Users, UserCheck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { prefetchPath } from "@/lib/vaultCache";
 
@@ -20,6 +20,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { name: "Calendar", href: "/planning", icon: CalendarDays, group: "planning" },
   { name: "Accounts", href: "/accounts", icon: Users, group: "vault" },
+  { name: "Sign-ups", href: "/signups", icon: UserCheck, group: "vault" },
   { name: "ISP", href: "/isp", icon: Globe, group: "vault" },
   { name: "API keys", href: "/keys", icon: KeyRound, group: "vault" },
   { name: "Mails", href: "/mails", icon: Mail, group: "mail" },

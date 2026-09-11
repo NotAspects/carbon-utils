@@ -110,18 +110,19 @@ function accountFromEmbed(e) {
   const fields = e.fields ?? [];
   const get = (re) => {
     const f = fields.find((f) => re.test((f.name ?? "").trim()));
-    return f ? (f.value ?? "").trim().replace(/`/g, "") : "";
+    return f ? (f.value ?? "").trim().replace(/\|\|/g, "").replace(/`/g, "") : "";
   };
   const login = get(/^(mail|email)\b/i) || get(/mail|email/i);
   const password = get(/password|pass\b/i);
-  if (!login || !password) return null;
+  if (!login) return null;
   return {
     login,
-    password,
+    password: password || null,
     phone: get(/phone/i) || null,
-    firstName: get(/first\s*name/i) || null,
-    lastName: get(/last\s*name/i) || null,
+    firstName: get(/first\s*name|firstname/i) || null,
+    lastName: get(/last\s*name|lastname/i) || null,
     birthDate: get(/birth/i) || null,
+    extra: [get(/country/i), get(/postal/i)].filter(Boolean).join(" "),
   };
 }
 
@@ -204,7 +205,8 @@ async function main() {
         const acc = accountFromEmbed(e);
         if (acc) {
           const key = acc.login.toLowerCase();
-          if (!seen.has(key)) seen.set(key, { ...acc, notes });
+          const note = `${notes}${acc.extra ? " " + acc.extra : ""}`.trim();
+          if (!seen.has(key)) seen.set(key, { ...acc, notes: note });
           handled = true;
         } else {
           extractFromText(e.description ?? "", notes, seen, seen);
@@ -229,7 +231,7 @@ async function main() {
   const accounts = [...seen.values()];
   console.log(`\n${matched} messages filtrés, ${accounts.length} comptes uniques extraits.`);
   for (const a of accounts.slice(0, 5)) {
-    console.log(`  ex: ${a.login}:${"*".repeat(Math.min(a.password.length, 8))}  [${a.notes}]`);
+    console.log(`  ex: ${a.login}:${a.password ? "*".repeat(Math.min(a.password.length, 8)) : "(sans mdp)"}  [${a.notes}]`);
   }
   if (accounts.length === 0) return;
 
