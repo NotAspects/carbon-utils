@@ -9,6 +9,10 @@ const PAGES: Record<string, { title: string; subtitle: string }> = {
     title: "Accounts",
     subtitle: "Pick a site to view and import accounts.",
   },
+  signups: {
+    title: "Sign-ups",
+    subtitle: "Mails déjà utilisés pour tes inscriptions, service par service.",
+  },
   mails: {
     title: "Mails",
     subtitle: "Pick a forward to view IMAP details and the mail list.",

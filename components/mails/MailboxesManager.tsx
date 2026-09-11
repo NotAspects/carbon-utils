@@ -100,6 +100,9 @@ export default function MailboxesManager() {
   const [outlookRows, setOutlookRows] = useState<MailAccountRow[]>([]);
   const [outlookFilter, setOutlookFilter] = useState<OutlookFilter>("all");
   const [outlookDomain, setOutlookDomain] = useState("all");
+  const [signupSites, setSignupSites] = useState<{ slug: string; name: string; total: number }[]>([]);
+  const [signupExclude, setSignupExclude] = useState("");
+  const [usedLogins, setUsedLogins] = useState<Set<string>>(new Set());
 
   const selected = mailboxes.find((m) => m.slug === selectedSlug) ?? null;
   const mailboxId = selected?.id ?? null;
@@ -207,6 +210,38 @@ export default function MailboxesManager() {
     setOutlookFilter("all");
     setOutlookDomain("all");
   }, [selectedSlug]);
+
+  useEffect(() => {
+    fetch("/api/signups")
+      .then((r) => r.json())
+      .then((d: { sites?: { slug: string; name: string; total: number }[] }) => setSignupSites(d.sites ?? []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!signupExclude) {
+      setUsedLogins(new Set());
+      return;
+    }
+    fetch(`/api/signups?site=${encodeURIComponent(signupExclude)}`)
+      .then((r) => r.json())
+      .then((d: { accounts?: { login: string }[] }) =>
+        setUsedLogins(new Set((d.accounts ?? []).map((a) => a.login.toLowerCase()))),
+      )
+      .catch(() => setUsedLogins(new Set()));
+  }, [signupExclude]);
+
+  // mails de la liste courante encore disponibles (non utilisés par le sign-up choisi)
+  const availableLines = useMemo(() => {
+    if (!signupExclude) return null;
+    return mailText
+      .split(/\r?\n/)
+      .filter((l) => l.trim())
+      .filter((l) => {
+        const mail = l.split(/[:,;]/)[0].trim().toLowerCase();
+        return !usedLogins.has(mail);
+      });
+  }, [mailText, signupExclude, usedLogins]);
 
   function notify(msg: string) {
     setFlash(msg);
@@ -422,6 +457,58 @@ export default function MailboxesManager() {
                 </button>
               </div>
             </div>
+
+            {signupSites.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--carbon-border)] p-2.5">
+                <span className="text-[11px] uppercase tracking-wide text-[var(--carbon-text-muted)]">
+                  Exclure sign-ups
+                </span>
+                <select
+                  value={signupExclude}
+                  onChange={(e) => setSignupExclude(e.target.value)}
+                  className="rounded-md border border-[var(--carbon-border)] bg-transparent px-2 py-1 text-[12px]"
+                >
+                  <option value="">Aucun</option>
+                  {signupSites.map((s) => (
+                    <option key={s.slug} value={s.slug}>
+                      {s.name} ({s.total})
+                    </option>
+                  ))}
+                </select>
+                {signupExclude && availableLines && (
+                  <>
+                    <span className="text-[12px] tabular-nums text-[var(--carbon-text-muted)]">
+                      {availableLines.length}/{mailCount} disponibles
+                    </span>
+                    <button
+                      type="button"
+                      disabled={!availableLines.length}
+                      onClick={() => copyValue("signup-avail", availableLines.join("\n"))}
+                      className="carbon-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px]"
+                    >
+                      {copied === "signup-avail" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      Copy available
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!availableLines.length}
+                      onClick={() => {
+                        const blob = new Blob([availableLines.join("\r\n")], { type: "text/plain;charset=utf-8" });
+                        const a = document.createElement("a");
+                        a.href = URL.createObjectURL(blob);
+                        a.download = `${selected.slug}-${signupExclude}-available.txt`;
+                        a.click();
+                        URL.revokeObjectURL(a.href);
+                      }}
+                      className="carbon-btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px]"
+                    >
+                      <Download className="h-3 w-3" />
+                      Download
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
             {isOutlook && (
               <div className="mb-3 space-y-2">
