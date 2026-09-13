@@ -461,7 +461,7 @@ export default function MailboxesManager() {
             {signupSites.length > 0 && (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--carbon-border)] p-2.5">
                 <span className="text-[11px] uppercase tracking-wide text-[var(--carbon-text-muted)]">
-                  Exclure sign-ups
+                  Exclure comptes
                 </span>
                 <select
                   value={signupExclude}

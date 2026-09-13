@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Sites de sign-ups : tout site dont le slug se termine par "-signups"
+// Sites exclus du sélecteur "disponibles" : tout site ayant au moins un compte
+// (catégories -signups + comptes réels type ticketmaster-*, seetickets, …)
 async function signupSites() {
   return prisma.site.findMany({
-    where: { slug: { endsWith: "-signups" } },
+    where: { accounts: { some: {} } },
     orderBy: { name: "asc" },
     include: { _count: { select: { accounts: true } } },
   });
