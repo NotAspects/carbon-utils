@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Copy, Download, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Check, ChevronDown, Copy, Download, Eye, EyeOff, Loader2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { MAILBOX_CATALOG, groupOutlookAccounts, parseMailEntries } from "@/lib/mailboxes";
 import { dropCachePrefix, fetchJson, peekCache } from "@/lib/vaultCache";
@@ -101,8 +101,20 @@ export default function MailboxesManager() {
   const [outlookFilter, setOutlookFilter] = useState<OutlookFilter>("all");
   const [outlookDomain, setOutlookDomain] = useState("all");
   const [signupSites, setSignupSites] = useState<{ slug: string; name: string; total: number }[]>([]);
-  const [signupExclude, setSignupExclude] = useState("");
+  const [signupExclude, setSignupExclude] = useState<string[]>([]);
+  const [signupOpen, setSignupOpen] = useState(false);
   const [usedLogins, setUsedLogins] = useState<Set<string>>(new Set());
+  const signupRef = useRef<HTMLDivElement | null>(null);
+
+  // Ferme le sélecteur au clic extérieur
+  useEffect(() => {
+    if (!signupOpen) return;
+    function onDown(e: MouseEvent) {
+      if (signupRef.current && !signupRef.current.contains(e.target as Node)) setSignupOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [signupOpen]);
 
   const selected = mailboxes.find((m) => m.slug === selectedSlug) ?? null;
   const mailboxId = selected?.id ?? null;
@@ -219,11 +231,11 @@ export default function MailboxesManager() {
   }, []);
 
   useEffect(() => {
-    if (!signupExclude) {
+    if (!signupExclude.length) {
       setUsedLogins(new Set());
       return;
     }
-    fetch(`/api/signups?site=${encodeURIComponent(signupExclude)}`)
+    fetch(`/api/signups?site=${encodeURIComponent(signupExclude.join(","))}`)
       .then((r) => r.json())
       .then((d: { accounts?: { login: string }[] }) =>
         setUsedLogins(new Set((d.accounts ?? []).map((a) => a.login.toLowerCase()))),
@@ -231,9 +243,13 @@ export default function MailboxesManager() {
       .catch(() => setUsedLogins(new Set()));
   }, [signupExclude]);
 
-  // mails de la liste courante encore disponibles (non utilisés par le sign-up choisi)
+  function toggleSignupSite(slug: string) {
+    setSignupExclude((prev) => (prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]));
+  }
+
+  // mails de la liste courante encore disponibles (non utilisés par les sign-ups/comptes choisis)
   const availableLines = useMemo(() => {
-    if (!signupExclude) return null;
+    if (!signupExclude.length) return null;
     return mailText
       .split(/\r?\n/)
       .filter((l) => l.trim())
@@ -463,19 +479,47 @@ export default function MailboxesManager() {
                 <span className="text-[11px] uppercase tracking-wide text-[var(--carbon-text-muted)]">
                   Exclure comptes
                 </span>
-                <select
-                  value={signupExclude}
-                  onChange={(e) => setSignupExclude(e.target.value)}
-                  className="rounded-md border border-[var(--carbon-border)] bg-transparent px-2 py-1 text-[12px]"
-                >
-                  <option value="">Aucun</option>
-                  {signupSites.map((s) => (
-                    <option key={s.slug} value={s.slug}>
-                      {s.name} ({s.total})
-                    </option>
-                  ))}
-                </select>
-                {signupExclude && availableLines && (
+                <div className="relative" ref={signupRef}>
+                  <button
+                    type="button"
+                    onClick={() => setSignupOpen((o) => !o)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[var(--carbon-border)] bg-transparent px-2 py-1 text-[12px] hover:border-[var(--carbon-text-muted)]"
+                  >
+                    {signupExclude.length
+                      ? `${signupExclude.length} sélectionné${signupExclude.length === 1 ? "" : "s"}`
+                      : "Aucun"}
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                  {signupOpen && (
+                    <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-60 overflow-y-auto rounded-md border border-[#2a2a2e] bg-[#161618] shadow-[0_8px_24px_rgba(0,0,0,0.6)]">
+                      {signupExclude.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSignupExclude([])}
+                          className="w-full border-b border-[var(--carbon-border)] px-3 py-1.5 text-left text-[11px] text-[var(--carbon-text-muted)] hover:bg-[var(--carbon-border)]/40"
+                        >
+                          Tout désélectionner
+                        </button>
+                      )}
+                      {signupSites.map((s) => (
+                        <label
+                          key={s.slug}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-[var(--carbon-border)]/40"
+                        >
+                          <input
+                            type="checkbox"
+                            className="accent-[var(--carbon-text)]"
+                            checked={signupExclude.includes(s.slug)}
+                            onChange={() => toggleSignupSite(s.slug)}
+                          />
+                          <span className="flex-1 truncate">{s.name}</span>
+                          <span className="tabular-nums text-[var(--carbon-text-muted)]">{s.total}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {signupExclude.length > 0 && availableLines && (
                   <>
                     <span className="text-[12px] tabular-nums text-[var(--carbon-text-muted)]">
                       {availableLines.length}/{mailCount} disponibles
@@ -496,7 +540,7 @@ export default function MailboxesManager() {
                         const blob = new Blob([availableLines.join("\r\n")], { type: "text/plain;charset=utf-8" });
                         const a = document.createElement("a");
                         a.href = URL.createObjectURL(blob);
-                        a.download = `${selected.slug}-${signupExclude}-available.txt`;
+                        a.download = `${selected.slug}-${signupExclude.join("+")}-available.txt`;
                         a.click();
                         URL.revokeObjectURL(a.href);
                       }}

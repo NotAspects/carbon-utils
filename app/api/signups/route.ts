@@ -25,16 +25,18 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const site = await prisma.site.findUnique({ where: { slug: siteSlug } });
-  if (!site) return NextResponse.json({ error: "site not found" }, { status: 404 });
+  // `site` peut contenir plusieurs slugs séparés par des virgules
+  const slugs = (siteSlug.split(",").map((s) => s.trim()).filter(Boolean));
+  const sites = await prisma.site.findMany({ where: { slug: { in: slugs } } });
+  if (!sites.length) return NextResponse.json({ error: "site not found" }, { status: 404 });
 
   const accounts = await prisma.account.findMany({
-    where: { siteId: site.id },
+    where: { siteId: { in: sites.map((s) => s.id) } },
     orderBy: { createdAt: "desc" },
     select: { id: true, login: true, notes: true, createdAt: true },
   });
   return NextResponse.json(
-    { site: { slug: site.slug, name: site.name }, accounts },
+    { site: { slug: sites.map((s) => s.slug).join(","), name: sites.map((s) => s.name).join(", ") }, accounts },
     { headers: { "Cache-Control": "private, max-age=15" } },
   );
 }
