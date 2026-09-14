@@ -5,7 +5,7 @@ import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 
 type SiteRow = { slug: string; name: string; total: number };
-type AccountRow = { id: string; login: string; notes: string | null; createdAt: string };
+type AccountRow = { id: string; login: string; notes: string | null; createdAt: string; mailboxes?: string[] };
 
 function countryOf(notes: string | null): string {
   const m = /\s([A-Z]{2})\s/.exec(notes ?? "");
@@ -106,8 +106,8 @@ export default function SignupsManager() {
 
   function exportCsv() {
     const rows = [
-      ["email", "country", "date"],
-      ...filtered.map((a) => [a.login, countryOf(a.notes), new Date(a.createdAt).toISOString()]),
+      ["email", "country", "batch", "date"],
+      ...filtered.map((a) => [a.login, countryOf(a.notes), (a.mailboxes ?? []).join(" / "), new Date(a.createdAt).toISOString()]),
     ];
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -171,6 +171,7 @@ export default function SignupsManager() {
               <tr>
                 <th className="px-3 py-2 font-medium">Email</th>
                 <th className="px-3 py-2 font-medium">Pays</th>
+                <th className="px-3 py-2 font-medium">Batch</th>
                 <th className="px-3 py-2 text-right font-medium">Date</th>
               </tr>
             </thead>
@@ -179,6 +180,9 @@ export default function SignupsManager() {
                 <tr key={a.id} className="border-t border-[var(--carbon-border)]">
                   <td className="px-3 py-1.5 font-mono text-[12px]">{a.login}</td>
                   <td className="px-3 py-1.5">{countryOf(a.notes)}</td>
+                  <td className="px-3 py-1.5 text-[var(--carbon-text-muted)]">
+                    {(a.mailboxes ?? []).length ? a.mailboxes!.join(", ") : "—"}
+                  </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-[var(--carbon-text-muted)]">
                     {new Date(a.createdAt).toLocaleDateString("fr-FR")}
                   </td>
@@ -186,7 +190,7 @@ export default function SignupsManager() {
               ))}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={3} className="px-3 py-6 text-center text-[var(--carbon-text-muted)]">
+                    <td colSpan={4} className="px-3 py-6 text-center text-[var(--carbon-text-muted)]">
                     {loadingAccounts ? "Chargement…" : "Aucun résultat"}
                   </td>
                 </tr>

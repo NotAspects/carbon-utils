@@ -35,8 +35,29 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
     select: { id: true, login: true, notes: true, createdAt: true },
   });
+
+  // Batch d'origine : mailbox(es) contenant ce mail (pour vérif manuelle des wins)
+  const mailboxes = await prisma.mailbox.findMany({
+    select: { name: true, accounts: { select: { login: true } } },
+  });
+  const batchByLogin = new Map<string, string[]>();
+  for (const mb of mailboxes) {
+    for (const a of mb.accounts) {
+      const k = a.login.split(/[:,;]/)[0].trim().toLowerCase();
+      const list = batchByLogin.get(k) ?? [];
+      if (!list.includes(mb.name)) list.push(mb.name);
+      batchByLogin.set(k, list);
+    }
+  }
+
   return NextResponse.json(
-    { site: { slug: sites.map((s) => s.slug).join(","), name: sites.map((s) => s.name).join(", ") }, accounts },
+    {
+      site: { slug: sites.map((s) => s.slug).join(","), name: sites.map((s) => s.name).join(", ") },
+      accounts: accounts.map((a) => ({
+        ...a,
+        mailboxes: batchByLogin.get(a.login.toLowerCase()) ?? [],
+      })),
+    },
     { headers: { "Cache-Control": "private, max-age=15" } },
   );
 }
