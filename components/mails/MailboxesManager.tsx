@@ -224,7 +224,7 @@ export default function MailboxesManager() {
   }, [selectedSlug]);
 
   useEffect(() => {
-    fetch("/api/signups")
+    fetch("/api/signups?all=1")
       .then((r) => r.json())
       .then((d: { sites?: { slug: string; name: string; total: number }[] }) => setSignupSites(d.sites ?? []))
       .catch(() => {});

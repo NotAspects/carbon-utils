@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, unauthorized } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Sites exclus du sélecteur "disponibles" : tout site ayant au moins un compte
-// (catégories -signups + comptes réels type ticketmaster-*, seetickets, …)
-async function signupSites() {
+// Sites pour le filtre "Exclure comptes" de la page Mails : tout site ayant au moins un
+// compte (catégories -signups + comptes réels type ticketmaster-*, seetickets, …).
+// La page Sign-ups, elle, ne doit lister QUE les catégories dont le slug finit en "-signups"
+// (sinon supprimer une carte y supprime les comptes réels en cascade).
+async function signupSites(all: boolean) {
   return prisma.site.findMany({
-    where: { accounts: { some: {} } },
+    where: all ? { accounts: { some: {} } } : { slug: { endsWith: "-signups" }, accounts: { some: {} } },
     orderBy: { name: "asc" },
     include: { _count: { select: { accounts: true } } },
   });
@@ -18,7 +20,8 @@ export async function GET(req: NextRequest) {
 
   const siteSlug = req.nextUrl.searchParams.get("site");
   if (!siteSlug) {
-    const sites = await signupSites();
+    const all = req.nextUrl.searchParams.get("all") === "1";
+    const sites = await signupSites(all);
     return NextResponse.json(
       { sites: sites.map((s) => ({ id: s.id, slug: s.slug, name: s.name, total: s._count.accounts })) },
       { headers: { "Cache-Control": "private, max-age=15" } },
@@ -114,6 +117,9 @@ export async function DELETE(req: NextRequest) {
 
   const site = await prisma.site.findUnique({ where: { slug: siteSlug } });
   if (!site) return NextResponse.json({ error: "site not found" }, { status: 404 });
+  if (!site.slug.endsWith("-signups")) {
+    return NextResponse.json({ error: "only -signups categories can be deleted here" }, { status: 403 });
+  }
 
   await prisma.site.delete({ where: { id: site.id } });
   return NextResponse.json({ deleted: site.slug });
