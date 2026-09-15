@@ -26,6 +26,23 @@ export default function SignupsManager() {
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [query, setQuery] = useState("");
+  const [batchFilter, setBatchFilter] = useState("all");
+  const [excludeSite, setExcludeSite] = useState("");
+  const [excludeLogins, setExcludeLogins] = useState<Set<string>>(new Set());
+
+  // charge les logins de la catégorie à exclure
+  useEffect(() => {
+    if (!excludeSite || !current) {
+      setExcludeLogins(new Set());
+      return;
+    }
+    fetch(`/api/signups?site=${encodeURIComponent(excludeSite)}`)
+      .then((r) => r.json())
+      .then((d: { accounts?: { login: string }[] }) =>
+        setExcludeLogins(new Set((d.accounts ?? []).map((a) => a.login.toLowerCase()))),
+      )
+      .catch(() => setExcludeLogins(new Set()));
+  }, [excludeSite, current]);
 
   const notify = (msg: string) => {
     setFlash(msg);
@@ -51,6 +68,8 @@ export default function SignupsManager() {
     setCurrent(site);
     setLoadingAccounts(true);
     setQuery("");
+    setBatchFilter("all");
+    setExcludeSite("");
     try {
       const d = await fetch(`/api/signups?site=${encodeURIComponent(site.slug)}`).then((r) => r.json());
       setAccounts(d.accounts ?? []);
@@ -61,13 +80,26 @@ export default function SignupsManager() {
     }
   }, []);
 
+  // comptage par batch (mailbox d'origine des mails)
+  const batchStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of accounts) {
+      const b = a.mailboxes?.length ? a.mailboxes.join(", ") : "(hors batch)";
+      counts.set(b, (counts.get(b) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((x, y) => y[1] - x[1]);
+  }, [accounts]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return accounts;
-    return accounts.filter(
-      (a) => a.login.toLowerCase().includes(q) || countryOf(a.notes).toLowerCase().includes(q),
-    );
-  }, [accounts, query]);
+    return accounts.filter((a) => {
+      if (excludeLogins.size && excludeLogins.has(a.login.toLowerCase())) return false;
+      const batch = a.mailboxes?.length ? a.mailboxes.join(", ") : "(hors batch)";
+      if (batchFilter !== "all" && batch !== batchFilter) return false;
+      if (!q) return true;
+      return a.login.toLowerCase().includes(q) || countryOf(a.notes).toLowerCase().includes(q);
+    });
+  }, [accounts, query, batchFilter, excludeLogins]);
 
   async function createCategory() {
     const name = newName.trim();
@@ -156,6 +188,38 @@ export default function SignupsManager() {
             placeholder="Rechercher un mail ou un pays…"
             className="min-w-64 flex-1 rounded-lg border border-[var(--carbon-border)] bg-transparent px-3 py-2 text-[13px] outline-none focus:border-[var(--carbon-text-muted)]"
           />
+          {batchStats.length > 0 && (
+            <select
+              value={batchFilter}
+              onChange={(e) => setBatchFilter(e.target.value)}
+              className="rounded-lg border border-[var(--carbon-border)] bg-transparent px-3 py-2 text-[13px]"
+            >
+              <option value="all">
+                Toutes les batchs ({accounts.length})
+              </option>
+              {batchStats.map(([name, count]) => (
+                <option key={name} value={name}>
+                  {name} ({count})
+                </option>
+              ))}
+            </select>
+          )}
+          {sites.length > 1 && (
+            <select
+              value={excludeSite}
+              onChange={(e) => setExcludeSite(e.target.value)}
+              className="rounded-lg border border-[var(--carbon-border)] bg-transparent px-3 py-2 text-[13px]"
+            >
+              <option value="">Aucune exclusion</option>
+              {sites
+                .filter((s) => s.slug !== current?.slug)
+                .map((s) => (
+                  <option key={s.slug} value={s.slug}>
+                    Exclure : {s.name} ({s.total})
+                  </option>
+                ))}
+            </select>
+          )}
           <button
             type="button"
             onClick={exportCsv}
